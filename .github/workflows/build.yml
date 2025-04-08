@@ -1,156 +1,64 @@
-name: Android Build
+- name: Setup Buildozer
+  run: |
+    # إنشاء رابط رمزي لـ tools/bin (اختياري)
+    mkdir -p $ANDROID_SDK_ROOT/tools
+    ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin $ANDROID_SDK_ROOT/tools/bin
 
-on:
-  push:
-    branches: [main]
+    # التحقق من وجود ملف buildozer.spec
+    if [ ! -f buildozer.spec ]; then
+      # إنشاء ملف buildozer.spec إذا لم يكن موجودًا
+      buildozer init
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            ccache \
-            git \
-            zip \
-            unzip \
-            libncurses5 \
-            libffi-dev \
-            libssl-dev \
-            libsqlite3-dev \
-            zlib1g-dev \
-            python3-pip \
-            make \
-            autoconf \
-            automake \
-            libtool \
-            patchelf \
-            libltdl-dev \
-            libxml2-dev \
-            libxslt-dev
-
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip wheel setuptools
-          pip install cython==0.29.33 buildozer==1.4.0
-          pip install kivy==2.1.0 pillow arabic-reshaper python-bidi
-
-      - name: Install Android SDK
-        run: |
-          ANDROID_SDK_ROOT="/opt/android-sdk"
-          sudo mkdir -p $ANDROID_SDK_ROOT
-          sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-
-          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-
-          mkdir -p $ANDROID_SDK_ROOT/licenses
-          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.2" \
-            "ndk;25.2.9519653" \
-            "cmake;3.22.1"
-
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
-
-      - name: Verify installations
-        run: |
-          echo "=== Python Version ==="
-          python --version
-          pip --version
-          
-          echo "=== Java Version ==="
-          java -version
-          javac -version
-          
-          echo "=== Android Tools ==="
-          sdkmanager --version
-          adb version
-
-      - name: Setup Buildozer
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT/tools
-          ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin $ANDROID_SDK_ROOT/tools/bin
-
-          if [ ! -f buildozer.spec ]; then
-            buildozer init
-            cat << 'EOL' > buildozer.spec
+      # كتابة إعدادات مخصصة لملف buildozer.spec
+      cat <<EOF > buildozer.spec
 [app]
+# (str) عنوان التطبيق
 title = My Application
+
+# (str) اسم الحزمة
 package.name = myapp
+
+# (str) نطاق الحزمة (مطلوب لتغليف Android/iOS)
 package.domain = org.test
+
+# (str) مسار كود المصدر الرئيسي
 source.dir = .
+
+# (list) ملفات المصدر للشمول (اتركه فارغًا لشمول جميع الملفات)
 source.include_exts = py,png,jpg,kv,atlas
+
+# (str) نسخة التطبيق
 version = 0.1
+
+# (list) متطلبات التطبيق
 requirements = python3,kivy==2.1.0,pillow,arabic_reshaper,python-bidi,android
+
+# (int) API المستهدف لأنظمة Android
 android.api = 33
+
+# (int) الحد الأدنى لـ API يدعمه التطبيق
 android.minapi = 21
+
+# (bool) قبول رخص Android SDK تلقائيًا
 android.accept_sdk_license = True
+
+# (str) مسار Android SDK
 android.sdk_path = /opt/android-sdk
+
+# (list) ориентации المدعومة
 orientation = portrait
+
+# (list) معالجات Android المستهدفة
 android.archs = arm64-v8a,armeabi-v7a
+
+# (bool) تمكين ميزة النسخ الاحتياطي التلقائي
 android.allow_backup = True
 
 [buildozer]
+# (int) مستوى السجلات (0 = خطأ فقط، 1 = معلومات، 2 = تصحيح مع إخراج الأوامر)
 log_level = 2
+
+# (int) عرض تحذير إذا تم تشغيل Buildozer كجذر (0 = False، 1 = True)
 warn_on_root = 1
-EOL
-          fi
-
-          mkdir -p ~/.buildozer/android/platform
-          if [ ! -d ~/.buildozer/android/platform/python-for-android ]; then
-            git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android
-            cd ~/.buildozer/android/platform/python-for-android
-            git checkout master
-            pip install --use-pep517 -e .
-          fi
-
-      - name: Build APK with Buildozer
-        run: |
-          buildozer android clean || true
-          export GRADLE_OPTS="-Xmx2048m -XX:MaxPermSize=512m"
-          buildozer -v android debug 2>&1 | tee build.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== Build Log ==="
-            cat build.log
-            echo "=== Debug Info ==="
-            ls -la bin/ || true
-            ls -la ~/.buildozer/android/platform || true
-            exit 1
-          fi
-
-      - name: Upload APK artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: myapp-apk
-          path: bin/*.apk
-          retention-days: 7
+EOF
+    fi
