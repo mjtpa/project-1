@@ -44,7 +44,7 @@ jobs:
             git \
             zip \
             unzip \
-            openjdk-11-jdk \
+            openjdk-17-jdk \
             libncurses5 \
             libffi-dev \
             libssl-dev \
@@ -52,8 +52,10 @@ jobs:
             zlib1g-dev \
             python3-pip
 
-          # تثبيت Java 17
-          sudo apt install -y openjdk-17-jdk
+          # Set JAVA_HOME to use OpenJDK 17
+          sudo update-alternatives --config java
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" | sudo tee -a /etc/environment
+          source /etc/environment
 
           pip install --upgrade pip
           pip install cython buildozer
