@@ -52,6 +52,9 @@ jobs:
             zlib1g-dev \
             python3-pip
 
+          # تثبيت Java 17
+          sudo apt install -y openjdk-17-jdk
+
           pip install --upgrade pip
           pip install cython buildozer
 
