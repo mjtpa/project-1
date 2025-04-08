@@ -9,15 +9,18 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v2
 
+      # Step 2: Get Date
       - name: Get Date
         id: get-date
         run: |
           echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
         shell: bash
 
+      # Step 3: Cache Buildozer global directory
       - name: Cache Buildozer global directory
         uses: actions/cache@v4
         with:
@@ -26,6 +29,7 @@ jobs:
           restore-keys: |
             buildozer-global-
 
+      # Step 4: Cache .buildozer directory
       - name: Cache .buildozer directory
         uses: actions/cache@v4
         with:
@@ -34,11 +38,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ steps.get-date.outputs.date }}-
 
+      # Step 5: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # Step 6: Install dependencies
       - name: Install dependencies
         run: |
           sudo apt update
@@ -62,37 +68,39 @@ jobs:
           pip install --upgrade pip
           pip install cython buildozer
 
+      # Step 7: Install Android SDK
       - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
           # Create Android SDK directory
-          sudo mkdir -p $ANDROID_SDK_ROOT
+          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
 
           # Download and extract command line tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
 
-          # Move contents to proper location (without 'latest' directory)
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/
-          rm -rf $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools
+          # Move contents to proper location (create 'latest' directory)
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
 
           # Install SDK components
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
             "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
           # Accept licenses
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
 
           # Add to environment
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
+      # Step 8: Build with Buildozer
       - name: Build with Buildozer
         run: |
           buildozer --verbose android debug
 
+      # Step 9: Upload artifacts
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
