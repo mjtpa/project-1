@@ -87,8 +87,24 @@ jobs:
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
-      # الخطوة 7: إعداد Buildozer
-      - name: Setup Buildozer environment
+      # الخطوة 7: التحقق من صحة التثبيت
+      - name: Verify installations
+        run: |
+          echo "=== Python Version ==="
+          python --version
+          pip --version
+          
+          echo "=== Java Version ==="
+          java -version
+          javac -version
+          
+          echo "=== Android Tools ==="
+          sdkmanager --version
+          adb version
+          aapt version
+
+      # الخطوة 8: إعداد Buildozer
+      - name: Setup Buildozer
         run: |
           # إنشاء رابط رمزي للتتوافق مع Buildozer
           mkdir -p $ANDROID_SDK_ROOT/tools
@@ -97,40 +113,60 @@ jobs:
           # إنشاء ملف buildozer.spec إذا لم يكن موجوداً
           if [ ! -f buildozer.spec ]; then
             buildozer init
-            # تعديل الملف المبدئي ليتوافق مع احتياجاتك
-            sed -i "s|^title = .*|title = My Application|" buildozer.spec
-            sed -i "s|^package.name = .*|package.name = myapp|" buildozer.spec
-            sed -i "s|^package.domain = .*|package.domain = org.test|" buildozer.spec
-            sed -i "s|^version = .*|version = 0.1|" buildozer.spec
-            sed -i "s|^requirements = .*|requirements = python3,kivy==2.1.0,pillow,arabic_reshaper,python-bidi,android|" buildozer.spec
-            sed -i "s|^android.api = .*|android.api = 33|" buildozer.spec
-            sed -i "s|^android.minapi = .*|android.minapi = 21|" buildozer.spec
-            sed -i "s|^android.sdk_path = .*|android.sdk_path = /opt/android-sdk|" buildozer.spec
-            sed -i "s|^android.archs = .*|android.archs = arm64-v8a,armeabi-v7a|" buildozer.spec
+            # نسخ محتوى buildozer.spec المطلوب
+            cat > buildozer.spec <<EOL
+[app]
+title = My Application
+package.name = myapp
+package.domain = org.test
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas
+version = 0.1
+requirements = python3,kivy==2.1.0,pillow,arabic_reshaper,python-bidi,android
+android.api = 33
+android.minapi = 21
+android.accept_sdk_license = True
+android.sdk_path = /opt/android-sdk
+orientation = portrait
+android.archs = arm64-v8a,armeabi-v7a
+android.allow_backup = True
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
+EOL
           fi
 
-          # تثبيت python-for-android بطريقة حديثة
+          # تثبيت python-for-android
           mkdir -p ~/.buildozer/android/platform
-          git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android
-          cd ~/.buildozer/android/platform/python-for-android
-          git checkout master
-          pip install --use-pep517 -e .
+          if [ ! -d ~/.buildozer/android/platform/python-for-android ]; then
+            git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android
+            cd ~/.buildozer/android/platform/python-for-android
+            git checkout master
+            pip install --use-pep517 -e .
+          fi
 
-      # الخطوة 8: البناء باستخدام Buildozer
+      # الخطوة 9: البناء باستخدام Buildozer
       - name: Build APK with Buildozer
         run: |
           # تنظيف البناء السابق
           buildozer android clean || true
-
+          
+          # زيادة ذاكرة Java المتاحة
+          export GRADLE_OPTS="-Xmx2048m -XX:MaxPermSize=512m"
+          
           # البناء مع تسجيل مفصل
           buildozer -v android debug 2>&1 | tee build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== Build Failed ==="
+            echo "=== Build Log ==="
             cat build.log
+            echo "=== Debug Info ==="
+            ls -la bin/ || true
+            ls -la ~/.buildozer/android/platform || true
             exit 1
           fi
 
-      # الخطوة 9: رفع الملف الناتج
+      # الخطوة 10: رفع الملف الناتج
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
