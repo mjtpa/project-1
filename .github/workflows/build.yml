@@ -64,8 +64,8 @@ jobs:
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
+          # Create necessary directories
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          cd /opt/android-sdk/cmdline-tools
           
           # Download the correct command line tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
@@ -74,15 +74,19 @@ jobs:
           # Move the extracted tools to the correct directory
           mv cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/
 
+          # Make sure the tools are available in the expected directory
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools/latest
+          mv $ANDROID_SDK_ROOT/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/latest/
+
           # Accept licenses and install necessary components using sdkmanager
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} \
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} \
             "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest"
           
           # Accept all licenses automatically
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
 
           # Install AIDL if it's not available in build-tools
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager "build-tools;33.0.2" "platform-tools" "platforms;android-33" "cmdline-tools;latest"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platform-tools" "platforms;android-33" "cmdline-tools;latest"
 
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
