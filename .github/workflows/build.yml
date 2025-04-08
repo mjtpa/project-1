@@ -42,9 +42,7 @@ jobs:
             patchelf \
             libltdl-dev \
             libxml2-dev \
-            libxslt-dev \
-            wget \
-            curl
+            libxslt-dev
 
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
           echo "$JAVA_HOME/bin" >> $GITHUB_PATH
@@ -59,10 +57,12 @@ jobs:
       # الخطوة 5: تثبيت Android SDK و NDK
       - name: Install Android tools
         run: |
+          # إعداد متغيرات البيئة
           ANDROID_SDK_ROOT="/opt/android-sdk"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
+          # إنشاء المجلدات وتغيير الملكية
           sudo mkdir -p $ANDROID_SDK_ROOT
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
 
@@ -80,35 +80,33 @@ jobs:
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
 
-          # تثبيت المكونات الأساسية أولاً
+          # تثبيت المكونات الأساسية
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
             "platform-tools" \
+            "platforms;android-33" \
             "build-tools;33.0.2" \
             "ndk;25.2.9519653" \
             "cmake;3.22.1"
 
-          # محاولة بديلة لتثبيت Platform 33 في حالة الفشل
-          PLATFORM_PACKAGE="platforms;android-33"
-          if ! sdkmanager --sdk_root=$ANDROID_SDK_ROOT "$PLATFORM_PACKAGE"; then
-            echo "Failed to install $PLATFORM_PACKAGE, trying alternative approach..."
-            mkdir -p $ANDROID_SDK_ROOT/platforms/android-33
-            wget https://dl.google.com/android/repository/platform-33-ext3_r03.zip -O /tmp/platform-33.zip
-            unzip /tmp/platform-33.zip -d $ANDROID_SDK_ROOT/platforms/android-33
-            rm /tmp/platform-33.zip
+          # إزالة أي إصدارات أخرى من NDK
+          if [ -d "/usr/local/lib/android/sdk/ndk" ]; then
+            echo "Removing conflicting NDK installation..."
+            rm -rf /usr/local/lib/android/sdk/ndk
           fi
 
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
       # الخطوة 6: التحقق من الأدوات
       - name: Verify tools
         run: |
-          echo "=== Android Tools ==="
+          echo "=== Android Tools Verification ==="
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
           sdkmanager --list --sdk_root=$ANDROID_SDK_ROOT
           javac -version
           adb version
-          python --version
-          pip list
 
       # الخطوة 7: إعداد Buildozer
       - name: Setup Buildozer
@@ -120,9 +118,6 @@ jobs:
           # تعديل ملف buildozer.spec
           sed -i "s|^android.ndk_path = .*|android.ndk_path = $ANDROID_NDK_HOME|" buildozer.spec
           sed -i "s|^android.sdk_path = .*|android.sdk_path = $ANDROID_SDK_ROOT|" buildozer.spec
-          sed -i "s|^android.api = .*|android.api = 33|" buildozer.spec
-          sed -i "s|^android.minapi = .*|android.minapi = 21|" buildozer.spec
-          sed -i "s|^android.archs = .*|android.archs = arm64-v8a,armeabi-v7a|" buildozer.spec
 
       # الخطوة 8: البناء باستخدام Buildozer
       - name: Build with Buildozer
@@ -130,7 +125,7 @@ jobs:
           # تنظيف البناء السابق
           buildozer android clean || true
 
-          # تنفيذ البناء مع تسجيل كامل
+          # البناء مع تسجيل كامل
           buildozer -v android debug 2>&1 | tee build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "=== Build Failed ==="
