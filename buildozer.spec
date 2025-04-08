@@ -18,7 +18,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
 # (list) Application requirements
-requirements = python3,kivy==2.0.0,pillow,arabic_reshaper,python-bidi,android,cython==0.29.33
+requirements = python3,kivy==2.2.1,pillow,arabic_reshaper,python-bidi,android,cython==0.29.33
 
 
 
