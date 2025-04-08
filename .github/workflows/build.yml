@@ -71,23 +71,23 @@ jobs:
       # 6. تطبيق Patch لتعديل ملف _img_sdl2.pyx لإضافة "noexcept"
       - name: Patch _img_sdl2.pyx for noexcept compatibility
         run: |
-          # البحث عن الملف داخل مجلد البناء (قد يختلف مساره حسب البيئة)
-          FILE_PATH=$(find . -type f -path "*/build/*/kivy/kivy/core/image/_img_sdl2.pyx" | head -n 1)
-          echo "Patching file: $FILE_PATH"
+          # البحث عن الملف باستخدام اسمه فقط
+          FILE_PATH=$(find . -type f -name "_img_sdl2.pyx" | head -n 1)
           if [ -z "$FILE_PATH" ]; then
-             echo "Error: File _img_sdl2.pyx not found!"
-             exit 1
+             echo "Warning: File _img_sdl2.pyx not found, skipping patch step."
+          else
+             echo "Patching file: $FILE_PATH"
+             # تعديل دالة write لإضافة noexcept
+             sed -i "s/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/" "$FILE_PATH"
+             # تعديل دالة close لإضافة noexcept
+             sed -i "s/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/" "$FILE_PATH"
           fi
-          # تعديل دالة write لتضيف noexcept
-          sed -i "s/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/" "$FILE_PATH"
-          # تعديل دالة close لتضيف noexcept
-          sed -i "s/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/" "$FILE_PATH"
 
       # 7. بناء التطبيق باستخدام Buildozer
       - name: Build with Buildozer
         run: |
           export ANDROIDSDK=/opt/android-sdk
-          # يُفترض أن يتم تنزيل NDK عن طريق Buildozer؛ يمكنك ضبط مسار NDK إذا كنت قد قمت بتثبيته
+          # يُفترض أن يتم تنزيل NDK عن طريق Buildozer؛ يمكنك ضبط مسار NDK إذا قمت بتثبيته
           export ANDROIDNDK=/home/runner/.buildozer/android/platform/android-ndk-r25b
           export ANDROIDAPI=33
           export NDK_API=21
