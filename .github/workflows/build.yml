@@ -1,96 +1,255 @@
-name: CI
+name: Unit tests & build apps
 
-on:
-  push:
-    branches: [main]
+on: ['push', 'pull_request']
+
+env:
+  APK_ARTIFACT_FILENAME: bdist_unit_tests_app-debug-1.1.apk
+  AAB_ARTIFACT_FILENAME: bdist_unit_tests_app-release-1.1.aab
+  AAR_ARTIFACT_FILENAME: bdist_unit_tests_app-release-1.1.aar
+  PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: 0
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
 
+  flake8:
+    name: Flake8 tests
+    runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout code
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout python-for-android
+      uses: actions/checkout@v4
+    - name: Set up Python 3.x
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - name: Run flake8
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox>=2.0
+        tox -e pep8
 
-      # Step 2: Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
+  test:
+    name: Pytest [Python ${{ matrix.python-version }} | ${{ matrix.os }}]
+    needs: flake8
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+        os: [ubuntu-latest, macOs-latest]
+    steps:
+    - name: Checkout python-for-android
+      uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Tox tests
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox>=2.0
+        make test
+    - name: Coveralls
+      uses: AndreMiras/coveralls-python-action@develop
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      with:
+        parallel: true
+        flag-name: run-${{ matrix.os }}-${{ matrix.python-version }}
+
+  ubuntu_build:
+    name: Build test APP [ ${{ matrix.runs_on }} | ${{ matrix.bootstrap.name }} ]
+    needs: [flake8]
+    runs-on: ${{ matrix.runs_on }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        runs_on: [ubuntu-latest]
+        bootstrap:
+          - name: sdl2
+            target: testapps-with-numpy
+          # - name: sdl2_scipy  # TODO: Re-enable this failing test.
+          #   target: testapps-with-scipy
+          - name: webview
+            target: testapps-webview
+          - name: service_library
+            target: testapps-service_library-aar
+          - name: qt
+            target: testapps-qt
+    steps:
+    - name: Checkout python-for-android
+      uses: actions/checkout@v4
+    - name: Build python-for-android docker image
+      run: |
+        docker build --tag=kivy/python-for-android .
+    - name: Build multi-arch ${{ matrix.bootstrap.target }} artifact with docker
+      run: |
+        docker run --name p4a-latest kivy/python-for-android make ${{ matrix.bootstrap.target }}
+    - name: Copy produced artifacts from docker container (*.apk, *.aab)
+      if: matrix.bootstrap.name != 'service_library'
+      run: |
+        mkdir -p dist
+        docker cp p4a-latest:/home/user/app/testapps/on_device_unit_tests/${{ env.APK_ARTIFACT_FILENAME }} dist/
+        docker cp p4a-latest:/home/user/app/testapps/on_device_unit_tests/${{ env.AAB_ARTIFACT_FILENAME }} dist/
+    - name: Copy produced artifacts from docker container (*.aar)
+      if: matrix.bootstrap.name == 'service_library'
+      run: |
+        mkdir -p dist
+        docker cp p4a-latest:/home/user/app/testapps/on_device_unit_tests/${{ env.AAR_ARTIFACT_FILENAME }} dist/
+    - name: Rename artifacts to include the build platform name (*.apk, *.aab, *.aar)
+      run: |
+        if [ -f dist/${{ env.APK_ARTIFACT_FILENAME }} ]; then mv dist/${{ env.APK_ARTIFACT_FILENAME }} dist/${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-${{ env.APK_ARTIFACT_FILENAME }}; fi
+        if [ -f dist/${{ env.AAB_ARTIFACT_FILENAME }} ]; then mv dist/${{ env.AAB_ARTIFACT_FILENAME }} dist/${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-${{ env.AAB_ARTIFACT_FILENAME }}; fi
+        if [ -f dist/${{ env.AAR_ARTIFACT_FILENAME }} ]; then mv dist/${{ env.AAR_ARTIFACT_FILENAME }} dist/${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-${{ env.AAR_ARTIFACT_FILENAME }}; fi
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-artifacts
+        path: dist
+
+  macos_build:
+    name: Build test APP [ ${{ matrix.runs_on }} | ${{ matrix.bootstrap.name }} ]
+    needs: [flake8]
+    runs-on: ${{ matrix.runs_on }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        # macos-latest (ATM macos-14) runs on Apple Silicon,
+        # macos-13 runs on Intel
+        runs_on: ['macos-latest', 'macos-13']
+        bootstrap:
+          - name: sdl2
+            target: testapps-with-numpy
+          - name: webview
+            target: testapps-webview
+    env:
+      ANDROID_HOME: ${HOME}/.android
+      ANDROID_SDK_ROOT: ${HOME}/.android/android-sdk
+      ANDROID_SDK_HOME: ${HOME}/.android/android-sdk
+      ANDROID_NDK_HOME: ${HOME}/.android/android-ndk
+    steps:
+      - name: Checkout python-for-android
+        uses: actions/checkout@v4
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
-      # Step 3: Install dependencies
-      - name: Install dependencies
+          python-version: 3.x
+      - name: Install python-for-android
         run: |
-          sudo apt update && sudo apt install -y \
-            build-essential \
-            ccache \
-            git \
-            zip \
-            unzip \
-            openjdk-18-jdk \
-            libncurses5 \
-            libffi-dev \
-            libssl-dev \
-            libsqlite3-dev \
-            zlib1g-dev \
-            python3-pip
-
-          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
-          echo "$JAVA_HOME/bin" >> $GITHUB_PATH
-
-          pip install --upgrade pip cython buildozer
-
-      # Step 4: Install Android SDK
-      - name: Install Android SDK
-        env:
-          ANDROID_SDK_ROOT: /opt/android-sdk
+          python3 -m pip install -e .
+      - name: Install prerequisites via pythonforandroid/prerequisites.py (Experimental)
         run: |
-          # إنشاء مجلد Android SDK
-          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-
-          # تنزيل أدوات القيادة (Command-Line Tools)
-          wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-
-          # نقل المحتويات إلى المجلد المناسب (إنشاء 'latest')
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-
-          # قبول الرخص يدويًا بإنشاء ملفات تحتوي على مفاتيح الرخص
-          mkdir -p $ANDROID_SDK_ROOT/licenses
-          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-
-          # تثبيت المكونات باستخدام sdkmanager
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
-            "platform-tools" "platforms;android-33" "build-tools;36.0.0"
-
-          # إضافة المسارات إلى البيئة
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-
-      # Step 5: Cache Buildozer directories
-      - name: Cache Buildozer directories
-        uses: actions/cache@v3
-        with:
-          path: |
-            .buildozer_global
-            .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}
-
-      # Step 6: Build with Buildozer
-      - name: Build with Buildozer
+          python3 pythonforandroid/prerequisites.py
+      - name: Install dependencies (Legacy)
         run: |
-          export ANDROIDSDK=$ANDROID_SDK_ROOT
-          export ANDROIDNDK=/opt/android-ndk
-          export ANDROIDAPI=33
-          export NDK_API=21
-          buildozer --verbose android debug
-
-      # Step 7: Upload APK artifact
-      - name: Upload APK
+          make --file ci/makefiles/osx.mk
+      - name: Build multi-arch apk Python 3 (armeabi-v7a, arm64-v8a, x86_64, x86)
+        run: |
+          make ${{ matrix.bootstrap.target }}
+      - name: Copy produced artifacts into dist/ (*.apk, *.aab)
+        run: |
+          mkdir -p dist
+          cp testapps/on_device_unit_tests/*.apk dist/
+          cp testapps/on_device_unit_tests/*.aab dist/
+          ls -l dist/
+      - name: Rename artifacts to include the build platform name (*.apk, *.aab)
+        run: |
+          if [ -f dist/${{ env.APK_ARTIFACT_FILENAME }} ]; then mv dist/${{ env.APK_ARTIFACT_FILENAME }} dist/${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-${{ env.APK_ARTIFACT_FILENAME }}; fi
+          if [ -f dist/${{ env.AAB_ARTIFACT_FILENAME }} ]; then mv dist/${{ env.AAB_ARTIFACT_FILENAME }} dist/${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-${{ env.AAB_ARTIFACT_FILENAME }}; fi
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-app
-          path: bin/*.apk
+          name: ${{ matrix.runs_on }}-${{ matrix.bootstrap.name }}-artifacts
+          path: dist
+
+  ubuntu_rebuild_updated_recipes:
+    name: Test updated recipes for arch ${{ matrix.android_arch }} [ ubuntu-latest ]
+    needs: [flake8]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        android_arch: ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
+    env:
+      REBUILD_UPDATED_RECIPES_EXTRA_ARGS: --arch=${{ matrix.android_arch }}
+    steps:
+    - name: Checkout python-for-android (all-history)
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    # helps with GitHub runner getting out of space
+    - name: Free disk space
+      run: |
+        df -h
+        sudo swapoff -a
+        sudo rm -f /swapfile
+        sudo apt -y clean
+        docker images -q | xargs -r docker rmi
+        df -h
+    - name: Pull docker image
+      run: |
+        make docker/pull
+    - name: Rebuild updated recipes
+      run: |
+        make docker/run/make/rebuild_updated_recipes
+
+  macos_rebuild_updated_recipes:
+    name: Test updated recipes for arch ${{ matrix.android_arch }} [ ${{ matrix.runs_on }} ]
+    needs: [flake8]
+    runs-on: ${{ matrix.runs_on }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        android_arch: ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
+        # macos-latest (ATM macos-14) runs on Apple Silicon,
+        # macos-13 runs on Intel
+        runs_on: ['macos-latest', 'macos-13']
+    env:
+      ANDROID_HOME: ${HOME}/.android
+      ANDROID_SDK_ROOT: ${HOME}/.android/android-sdk
+      ANDROID_SDK_HOME: ${HOME}/.android/android-sdk
+      ANDROID_NDK_HOME: ${HOME}/.android/android-ndk
+      REBUILD_UPDATED_RECIPES_EXTRA_ARGS: --arch=${{ matrix.android_arch }}
+    steps:
+      - name: Checkout python-for-android (all-history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Install python-for-android
+        run: |
+          python3 -m pip install -e .
+      - name: Install prerequisites via pythonforandroid/prerequisites.py (Experimental)
+        run: |
+          python3 pythonforandroid/prerequisites.py
+      - name: Install dependencies (Legacy)
+        run: |
+          make --file ci/makefiles/osx.mk
+      - name: Rebuild updated recipes
+        run: |
+          make rebuild_updated_recipes
+
+  coveralls_finish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Coveralls Finished
+      uses: AndreMiras/coveralls-python-action@develop
+      with:
+        parallel-finished: true
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Requirements
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r doc/requirements.txt
+    - name: Check links
+      run: sphinx-build -b linkcheck doc/source doc/build
+    - name: Generate documentation
+      run: sphinx-build doc/source doc/build
