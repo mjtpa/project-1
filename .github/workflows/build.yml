@@ -47,11 +47,12 @@ jobs:
           pip install --upgrade pip wheel setuptools
           pip install cython==0.29.33 buildozer==1.4.0
 
-      # الخطوة 4: تثبيت Android SDK
-      - name: Install Android SDK
+      # الخطوة 4: تثبيت Android SDK و NDK
+      - name: Install Android tools
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
+          # إنشاء مجلدات SDK
           sudo mkdir -p $ANDROID_SDK_ROOT
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
 
@@ -65,52 +66,38 @@ jobs:
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
 
-          # إضافة المسارات إلى البيئة
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-
           # تثبيت المكونات الأساسية
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
             "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
 
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-
-      # الخطوة 5: إعداد متغيرات البيئة
-      - name: Setup environment variables
-        run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          # إعداد المتغيرات البيئية
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
-      # الخطوة 6: التحقق من الأدوات
-      - name: Verify tools
+      # الخطوة 5: تهيئة Buildozer
+      - name: Initialize Buildozer
         run: |
-          sdkmanager --version
-          javac -version
-          adb --version
-          which sdkmanager
+          # إنشاء ملف buildozer.spec إذا لم يكن موجوداً
+          if [ ! -f buildozer.spec ]; then
+            buildozer init
+          fi
 
-      # الخطوة 7: تخزين مؤقت
-      - name: Cache Buildozer
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}
+          # تنزيل python-for-android مسبقاً
+          mkdir -p ~/.buildozer/android/platform
+          git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android
+          cd ~/.buildozer/android/platform/python-for-android
+          git checkout master
+          pip install -e .
 
-      # الخطوة 8: البناء
+      # الخطوة 6: البناء باستخدام Buildozer
       - name: Build with Buildozer
         run: |
           # إنشاء رابط رمزي للتتوافق مع Buildozer
           mkdir -p $ANDROID_SDK_ROOT/tools
           ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin $ANDROID_SDK_ROOT/tools/bin
 
-          # تنظيف البناء السابق
-          buildozer android clean
-
-          # البناء
+          # البناء بدون تنظيف أولي لتجنب المشكلة
           buildozer \
             --verbose \
             android debug \
@@ -118,8 +105,9 @@ jobs:
             --sdk_dir=$ANDROID_SDK_ROOT \
             --ndk_dir=$ANDROID_SDK_ROOT/ndk/25.2.9519653
 
-      # الخطوة 9: رفع الملف الناتج
+      # الخطوة 7: رفع الملف الناتج
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-release
