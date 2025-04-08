@@ -30,7 +30,8 @@ android.minapi = 21
 android.accept_sdk_license = True
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
-android.sdk_path = /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager
+# Use the SDK directory path here, not sdkmanager
+android.sdk_path = /opt/android-sdk
 
 # (list) Supported orientations
 orientation = portrait
@@ -51,4 +52,3 @@ warn_on_root = 1
 # (list) Add custom environment variables
 # Here we define the path for the Android SDK and NDK, ensuring Buildozer finds them
 env = ANDROID_SDK_ROOT=/opt/android-sdk;ANDROIDNDK=/opt/android-sdk/ndk/25.1.8937393
-
