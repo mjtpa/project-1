@@ -63,11 +63,12 @@ jobs:
           cd /opt/android-sdk/cmdline-tools
           
           wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d latest
+          unzip cmdline-tools.zip
 
-          # تجنب نقل المجلد إلى نفسه
-          mv /opt/android-sdk/cmdline-tools/latest/* /opt/android-sdk/cmdline-tools/
+          # Move the extracted tools to the correct directory
+          mv cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/
 
+          # Install necessary components using sdkmanager
           yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} \
             "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest"
 
