@@ -9,24 +9,20 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # الخطوة 1: استخراج الكود
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # الخطوة 2: إعداد Python 3.10
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # الخطوة 3: إعداد Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # الخطوة 4: تثبيت التبعيات الأساسية
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -51,14 +47,12 @@ jobs:
             libxml2-dev \
             libxslt-dev
 
-      # الخطوة 5: تثبيت تبعيات Python
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip wheel setuptools
           pip install cython==0.29.33 buildozer==1.4.0
           pip install kivy==2.1.0 pillow arabic-reshaper python-bidi
 
-      # الخطوة 6: تثبيت وتكوين Android SDK
       - name: Install Android SDK
         run: |
           ANDROID_SDK_ROOT="/opt/android-sdk"
@@ -87,7 +81,6 @@ jobs:
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
-      # الخطوة 7: التحقق من صحة التثبيت
       - name: Verify installations
         run: |
           echo "=== Python Version ==="
@@ -101,20 +94,15 @@ jobs:
           echo "=== Android Tools ==="
           sdkmanager --version
           adb version
-          aapt version
 
-      # الخطوة 8: إعداد Buildozer
       - name: Setup Buildozer
         run: |
-          # إنشاء رابط رمزي للتتوافق مع Buildozer
           mkdir -p $ANDROID_SDK_ROOT/tools
           ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin $ANDROID_SDK_ROOT/tools/bin
 
-          # إنشاء ملف buildozer.spec إذا لم يكن موجوداً
           if [ ! -f buildozer.spec ]; then
             buildozer init
-            # نسخ محتوى buildozer.spec المطلوب
-            cat > buildozer.spec <<EOL
+            cat << 'EOF' > buildozer.spec
 [app]
 title = My Application
 package.name = myapp
@@ -134,10 +122,9 @@ android.allow_backup = True
 [buildozer]
 log_level = 2
 warn_on_root = 1
-EOL
+EOF
           fi
 
-          # تثبيت python-for-android
           mkdir -p ~/.buildozer/android/platform
           if [ ! -d ~/.buildozer/android/platform/python-for-android ]; then
             git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android
@@ -146,16 +133,10 @@ EOL
             pip install --use-pep517 -e .
           fi
 
-      # الخطوة 9: البناء باستخدام Buildozer
       - name: Build APK with Buildozer
         run: |
-          # تنظيف البناء السابق
           buildozer android clean || true
-          
-          # زيادة ذاكرة Java المتاحة
           export GRADLE_OPTS="-Xmx2048m -XX:MaxPermSize=512m"
-          
-          # البناء مع تسجيل مفصل
           buildozer -v android debug 2>&1 | tee build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "=== Build Log ==="
@@ -166,7 +147,6 @@ EOL
             exit 1
           fi
 
-      # الخطوة 10: رفع الملف الناتج
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
