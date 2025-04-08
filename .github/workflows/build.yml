@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
@@ -10,20 +10,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Get Date
-        id: get-date
-        run: echo "date=$(date -u +%Y%m%d)" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Cache Buildozer directories
-        uses: actions/cache@v4
-        with:
-          path: |
-            .buildozer_global
-            .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ steps.get-date.outputs.date }}
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -33,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential ccache git zip unzip openjdk-18-jdk libncurses5 libffi-dev libssl-dev libsqlite3-dev zlib1g-dev python3-pip
+          sudo apt install -y build-essential ccache git zip unzip openjdk-18-jdk libncurses5 libffi-dev libssl-dev libsqlite3-dev zlib1g-dev
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
           echo "$JAVA_HOME/bin" >> $GITHUB_PATH
           pip install --upgrade pip cython buildozer
@@ -42,17 +29,37 @@ jobs:
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
+          # إنشاء مجلد SDK
           sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-          wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
+          
+          # تنزيل أدوات القيادة (إصدار حديث يدعم --accept)
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --accept "platform-tools" "platforms;android-33" "build-tools;36.0.0"
+          
+          # قبول الرخص يدويًا
+          mkdir -p $ANDROID_SDK_ROOT/licenses
+          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+          
+          # تثبيت المكونات مع تفعيل --accept
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses <<EOF
+          y
+          y
+          y
+          y
+          EOF
+          
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;36.0.0"
+          
+          # إضافة المسارات إلى البيئة
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
       - name: Build with Buildozer
-        run: buildozer --verbose android debug
+        run: |
+          buildozer --verbose android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
