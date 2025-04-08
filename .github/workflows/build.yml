@@ -44,7 +44,7 @@ jobs:
             git \
             zip \
             unzip \
-            openjdk-17-jdk \
+            openjdk-18-jdk \
             libncurses5 \
             libffi-dev \
             libssl-dev \
@@ -52,9 +52,9 @@ jobs:
             zlib1g-dev \
             python3-pip
 
-          # Set JAVA_HOME to use OpenJDK 17
+          # Set JAVA_HOME to use OpenJDK 18
           sudo update-alternatives --config java
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" | sudo tee -a /etc/environment
+          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" | sudo tee -a /etc/environment
           source /etc/environment
 
           pip install --upgrade pip
