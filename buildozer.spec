@@ -30,7 +30,7 @@ android.minapi = 21
 android.accept_sdk_license = True
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
-android.sdk_path = /opt/android-sdk
+android.sdk_path = /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager
 
 # (list) Supported orientations
 orientation = portrait
