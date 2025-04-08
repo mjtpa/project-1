@@ -9,60 +9,86 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      # Step 1: Checkout code
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
+      # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y build-essential ccache git zip unzip openjdk-18-jdk libncurses5 libffi-dev libssl-dev libsqlite3-dev zlib1g-dev
+          sudo apt update && sudo apt install -y \
+            build-essential \
+            ccache \
+            git \
+            zip \
+            unzip \
+            openjdk-18-jdk \
+            libncurses5 \
+            libffi-dev \
+            libssl-dev \
+            libsqlite3-dev \
+            zlib1g-dev \
+            python3-pip
+
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
           echo "$JAVA_HOME/bin" >> $GITHUB_PATH
+
           pip install --upgrade pip cython buildozer
 
+      # Step 4: Install Android SDK
       - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
-          # إنشاء مجلد SDK
+          # Create Android SDK directory
           sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-          
-          # تنزيل أدوات القيادة (إصدار حديث يدعم --accept)
-          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+
+          # Download and extract command-line tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          
-          # قبول الرخص يدويًا
+
+          # Accept licenses by creating placeholder files
           mkdir -p $ANDROID_SDK_ROOT/licenses
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-          
-          # تثبيت المكونات مع تفعيل --accept
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses <<EOF
-          y
-          y
-          y
-          y
-          EOF
-          
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;36.0.0"
-          
-          # إضافة المسارات إلى البيئة
+
+          # Install SDK components
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+            "platform-tools" "platforms;android-33" "build-tools;36.0.0"
+
+          # Add to environment
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
+      # Step 5: Cache Buildozer directories
+      - name: Cache Buildozer directories
+        uses: actions/cache@v3
+        with:
+          path: |
+            .buildozer_global
+            .buildozer
+          key: buildozer-${{ hashFiles('buildozer.spec') }}
+
+      # Step 6: Build with Buildozer
       - name: Build with Buildozer
         run: |
+          export ANDROIDSDK=$ANDROID_SDK_ROOT
+          export ANDROIDNDK=/opt/android-ndk
+          export ANDROIDAPI=33
+          export NDK_API=21
           buildozer --verbose android debug
 
+      # Step 7: Upload APK artifact
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: android-app
           path: bin/*.apk
