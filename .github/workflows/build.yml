@@ -23,12 +23,16 @@ jobs:
         with:
           path: .buildozer_global
           key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-global-
 
       - name: Cache .buildozer directory
         uses: actions/cache@v4
         with:
           path: .buildozer
           key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-date.outputs.date }}-
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -52,49 +56,45 @@ jobs:
             zlib1g-dev \
             python3-pip
 
-          # Set JAVA_HOME to use OpenJDK 18
-          sudo update-alternatives --config java
-          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" | sudo tee -a /etc/environment
-          source /etc/environment
+          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
+          echo "$JAVA_HOME/bin" >> $GITHUB_PATH
 
           pip install --upgrade pip
           pip install cython buildozer
 
-      - name: Install Android SDK + AIDL
+      - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
-          # Create necessary directories
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          
-          # Download the correct command line tools
+          # Create Android SDK directory
+          sudo mkdir -p $ANDROID_SDK_ROOT
+          sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
+
+          # Download and extract command line tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip
+          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
 
-          # Ensure the tools are in the right place (cmdline-tools/latest/)
-          mv $ANDROID_SDK_ROOT/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/
+          # Move contents to proper location (without 'latest' directory)
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/
+          rm -rf $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools
 
-          # Make sure the tools are available in the expected directory
-          mv $ANDROID_SDK_ROOT/cmdline-tools /opt/android-sdk/cmdline-tools/latest
+          # Install SDK components
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+            "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
-          # Accept licenses and install necessary components using sdkmanager
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} \
-            "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest"
-          
-          # Accept all licenses automatically
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+          # Accept licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager --licenses
 
-          # Install AIDL if it's not available in build-tools
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platform-tools" "platforms;android-33" "cmdline-tools;latest"
-
+          # Add to environment
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
       - name: Build with Buildozer
-        run: buildozer android debug
+        run: |
+          buildozer --verbose android debug
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: package
+          name: android-app
           path: bin/*.apk
