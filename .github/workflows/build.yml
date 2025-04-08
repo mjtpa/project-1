@@ -42,7 +42,9 @@ jobs:
             patchelf \
             libltdl-dev \
             libxml2-dev \
-            libxslt-dev
+            libxslt-dev \
+            wget \
+            curl
 
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
           echo "$JAVA_HOME/bin" >> $GITHUB_PATH
@@ -78,13 +80,22 @@ jobs:
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
 
-          # تثبيت المكونات المطلوبة
+          # تثبيت المكونات الأساسية أولاً
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
             "platform-tools" \
-            "platforms;android-33" \
             "build-tools;33.0.2" \
             "ndk;25.2.9519653" \
             "cmake;3.22.1"
+
+          # محاولة بديلة لتثبيت Platform 33 في حالة الفشل
+          PLATFORM_PACKAGE="platforms;android-33"
+          if ! sdkmanager --sdk_root=$ANDROID_SDK_ROOT "$PLATFORM_PACKAGE"; then
+            echo "Failed to install $PLATFORM_PACKAGE, trying alternative approach..."
+            mkdir -p $ANDROID_SDK_ROOT/platforms/android-33
+            wget https://dl.google.com/android/repository/platform-33-ext3_r03.zip -O /tmp/platform-33.zip
+            unzip /tmp/platform-33.zip -d $ANDROID_SDK_ROOT/platforms/android-33
+            rm /tmp/platform-33.zip
+          fi
 
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
