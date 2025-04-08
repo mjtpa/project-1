@@ -66,12 +66,12 @@ jobs:
           sudo mkdir -p $ANDROID_SDK_ROOT
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
 
-          # تنزيل وتثبيت أدوات القيادة
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          # تنزيل وتثبيت أدوات القيادة (الإصدار الأحدث)
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
 
-          # إعداد المسار
+          # إعداد المسار الصحيح
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
 
@@ -80,8 +80,9 @@ jobs:
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
 
-          # تثبيت المكونات الأساسية باستخدام Java 11
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+          # تثبيت المكونات الأساسية
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --install "cmdline-tools;latest"
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --install \
             "platform-tools" \
             "platforms;android-33" \
             "build-tools;33.0.2" \
@@ -119,8 +120,12 @@ jobs:
       # الخطوة 8: البناء باستخدام Buildozer
       - name: Build with Buildozer
         run: |
-          # تنظيف البناء السابق (تخطي الأخطاء)
-          buildozer android clean || true
+          # تنزيل python-for-android مسبقاً
+          mkdir -p ~/.buildozer/android/platform
+          git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android
+          cd ~/.buildozer/android/platform/python-for-android
+          git checkout master
+          pip install -e .
 
           # البناء مع تسجيل كامل
           buildozer -v android debug 2>&1 | tee build.log
