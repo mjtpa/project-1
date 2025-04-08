@@ -1,5 +1,3 @@
-# Example GitHub Actions workflow to fix sdkmanager path
-
 name: Build APK
 
 on:
@@ -12,17 +10,17 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # Step 1: Checkout code
+      # 1. التحقق من الكود
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up Python
+      # 2. إعداد Python وإعداد البيئة
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # Step 3: Install dependencies
+      # 3. تثبيت الاعتمادات الأساسية
       - name: Install dependencies
         run: |
           sudo apt update && sudo apt install -y \
@@ -38,42 +36,30 @@ jobs:
             libsqlite3-dev \
             zlib1g-dev \
             python3-pip
-
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
-          echo "$JAVA_HOME/bin" >> $GITHUB_PATH
+          echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
+          # تثبيت Buildozer مع إصدار محدد من Cython لتوافق أفضل
+          pip install --upgrade pip cython==0.29.33 buildozer
 
-          pip install --upgrade pip cython buildozer
-
-      # Step 4: Install Android SDK
+      # 4. تثبيت Android SDK
       - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
-          # إنشاء مجلد Android SDK إذا لم يكن موجوداً
           sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-
-          # تنزيل أدوات القيادة (Command-Line Tools)
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-
-          # نقل المحتويات إلى المجلد المناسب (إنشاء 'latest')
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-
-          # قبول الرخص يدويًا بإنشاء ملفات تحتوي على مفاتيح الرخص
           mkdir -p $ANDROID_SDK_ROOT/licenses
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-
-          # تثبيت المكونات باستخدام sdkmanager
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
-            "platform-tools" "platforms;android-33" "build-tools;36.0.0"
-
-          # Create symlink for sdkmanager to fix Buildozer expectations
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;36.0.0"
+          # إنشاء رابط رمزي لتلبية توقع Buildozer (sdkmanager يُطلب في المسار القديم)
           sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
           sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
 
-      # Step 5: Cache Buildozer directories
+      # 5. استخدام الكاش لمجلدات Buildozer لتسريع البناء
       - name: Cache Buildozer directories
         uses: actions/cache@v3
         with:
@@ -82,17 +68,33 @@ jobs:
             .buildozer
           key: buildozer-${{ hashFiles('buildozer.spec') }}
 
-      # Step 6: Build with Buildozer
+      # 6. تطبيق Patch لتعديل ملف _img_sdl2.pyx لإضافة "noexcept"
+      - name: Patch _img_sdl2.pyx for noexcept compatibility
+        run: |
+          # البحث عن الملف داخل مجلد البناء (قد يختلف مساره حسب البيئة)
+          FILE_PATH=$(find . -type f -path "*/build/*/kivy/kivy/core/image/_img_sdl2.pyx" | head -n 1)
+          echo "Patching file: $FILE_PATH"
+          if [ -z "$FILE_PATH" ]; then
+             echo "Error: File _img_sdl2.pyx not found!"
+             exit 1
+          fi
+          # تعديل دالة write لتضيف noexcept
+          sed -i "s/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/" "$FILE_PATH"
+          # تعديل دالة close لتضيف noexcept
+          sed -i "s/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/" "$FILE_PATH"
+
+      # 7. بناء التطبيق باستخدام Buildozer
       - name: Build with Buildozer
         run: |
-          export ANDROIDSDK=$ANDROID_SDK_ROOT
-          export ANDROIDNDK=/opt/android-ndk
+          export ANDROIDSDK=/opt/android-sdk
+          # يُفترض أن يتم تنزيل NDK عن طريق Buildozer؛ يمكنك ضبط مسار NDK إذا كنت قد قمت بتثبيته
+          export ANDROIDNDK=/home/runner/.buildozer/android/platform/android-ndk-r25b
           export ANDROIDAPI=33
           export NDK_API=21
           buildozer --verbose android debug
 
-      # Step 7: Upload APK artifact
-      - name: Upload APK
+      # 8. رفع الـ APK كـ artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-app
