@@ -1,4 +1,3 @@
-
 name: Build APK
 
 on:
@@ -162,6 +161,14 @@ EOF
           
           echo "Apache Ant setup complete"
 
+      - name: Cache Buildozer directories
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
+
       - name: Prepare required files
         run: |
           if [ ! -f "default_album_cover.gif" ]; then
@@ -178,7 +185,10 @@ EOF
           [ ! -f "data/theme.json" ] && echo '{"theme_name": "DeepPurple"}' > data/theme.json
           mkdir -p fonts
 
-      - name: Patch Kivy for compatibility
+          echo "Current directory structure:"
+          find . -type f -not -path "./.git/*" | sort
+
+      - name: Patch _img_sdl2.pyx for noexcept compatibility
         run: |
           pip install kivy==2.1.0
           SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
@@ -190,6 +200,7 @@ EOF
             sed -i 's/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/' "$FILE_PATH"
           else
             echo "Warning: File not found: $FILE_PATH"
+            find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
           fi
 
       - name: Configure buildozer.spec
@@ -225,7 +236,7 @@ EOF
           name: android-app
           path: bin/*.apk
           
-      - name: Upload build logs on failure
+      - name: Upload build logs if build fails
         if: failure()
         uses: actions/upload-artifact@v4
         with:
