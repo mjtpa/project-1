@@ -74,7 +74,7 @@ warn_on_root = 1
 android.accept_sdk_license = True
 
 # إعدادات NDK
-android.ndk_path = 
+android.ndk_path = /opt/android-ndk/
 
 # إعدادات OpenJDK
 android.java_jdk_path = /usr/lib/jvm/java-17-openjdk-amd64
