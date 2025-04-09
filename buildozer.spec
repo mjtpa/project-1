@@ -26,7 +26,7 @@ version = 0.1
 # (list) Application requirements
 # Using compatible versions to avoid dependency conflicts
 requirements = python3,kivy==2.1.0,kivymd==1.1.1,pillow,arabic_reshaper,python-bidi,cython==0.29.33,mutagen,sdl2_ttf,sdl2_image,sdl2_mixer,wheel
-
+android.pip_options = --use-pep517
 # (str) Presplash of the application
 presplash.filename = %(source.dir)s/default_album_cover.gif
 
