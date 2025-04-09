@@ -35,11 +35,10 @@ jobs:
             python3-pip \
             python3-dev
 
-      - name: Install Cython and build dependencies
+      - name: Install Python build tools
         run: |
-          # تثبيت Cython عبر pip بدلاً من apt
           python -m pip install --upgrade pip setuptools wheel
-          pip install cython==0.29.33
+          pip install cython==0.29.33 buildozer
 
       - name: Install Android NDK
         run: |
@@ -48,7 +47,6 @@ jobs:
           wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip -q android-ndk-r25b-linux.zip -d /opt/android-ndk
           mv /opt/android-ndk/android-ndk-r25b /opt/android-ndk/25.1.8937393
-          echo "/opt/android-ndk/25.1.8937393" >> $GITHUB_PATH
           echo "ANDROID_NDK_HOME=/opt/android-ndk/25.1.8937393" >> $GITHUB_ENV
 
       - name: Install Android SDK
@@ -63,27 +61,39 @@ jobs:
           mv $ANDROID_SDK_ROOT/cmdline-tools-latest $ANDROID_SDK_ROOT/cmdline-tools/latest
           
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/build-tools/33.0.2" >> $GITHUB_PATH
 
-      - name: Install Python build dependencies
+      - name: Install Kivy dependencies
         run: |
-          pip install buildozer
           pip install kivy==2.1.0 kivymd==1.1.1 pillow arabic_reshaper python-bidi mutagen
 
-      - name: Build with Buildozer
-        timeout-minutes: 45
+      - name: Configure Buildozer
         run: |
+          mkdir -p ~/.buildozer
+          echo "[buildozer]" > ~/.buildozer/buildozer.spec
+          echo "log_level = 1" >> ~/.buildozer/buildozer.spec
+
+      - name: Build with Buildozer
+        timeout-minutes: 60
+        run: |
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/build-tools/33.0.2
           export ANDROIDSDK=$ANDROID_SDK_ROOT
           export ANDROIDNDK=$ANDROID_NDK_HOME
           export ANDROIDAPI=33
           
-          # تنظيف البناء السابق
-          rm -rf .buildozer/android/platform/build-*/
-          rm -rf .buildozer/android/app
+          # Save full log to file
+          buildozer --verbose android debug 2>&1 | tee build.log
           
-          buildozer --verbose android debug || (find .buildozer -name "*.log" -exec cat {} \; && exit 1)
+          # Compress logs for artifact
+          tar czf logs.tar.gz .buildozer/*.log build.log
+          
+          # Upload full logs as artifact
+          if [ -f "bin/*.apk" ]; then
+            echo "Build successful!"
+          else
+            echo "Build failed! Showing errors:"
+            grep -i error build.log | head -n 50
+            exit 1
+          fi
 
       - name: Upload APK artifact
         if: success()
@@ -91,3 +101,9 @@ jobs:
         with:
           name: app-apk
           path: bin/*.apk
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: logs.tar.gz
