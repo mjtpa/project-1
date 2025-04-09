@@ -64,8 +64,7 @@ include_patterns =
     data/*.json,
     data/*.gif
 
-# Exclude unnecessary files
-exclude_patterns = apache-ant-1.9.4/*
+
 
 # Performance optimizations
 android.enable_androidx = True
