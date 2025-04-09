@@ -93,167 +93,86 @@ jobs:
             exit 1
           fi
 
-      # Pre-download and prepare Apache Ant
-      - name: Pre-download Apache Ant and patch Python 2 scripts
+      # Create a simpler Python 3 compatible version of runant.py
+      - name: Create Python 3 compatible runant.py
         run: |
-          mkdir -p ~/.buildozer/android/platform
-          cd ~/.buildozer/android/platform
+          mkdir -p ~/.buildozer/android/platform/apache-ant-1.9.4/bin
           
-          # Download Apache Ant
-          echo "Downloading Apache Ant..."
-          curl -L https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -o apache-ant-1.9.4-bin.tar.gz
-          
-          # Extract Apache Ant
-          echo "Extracting Apache Ant..."
-          tar -xzf apache-ant-1.9.4-bin.tar.gz
-          
-          # Patch the runant.py script to be Python 3 compatible
-          echo "Patching runant.py for Python 3 compatibility..."
-          cat > apache-ant-1.9.4/bin/runant.py << 'EOF'
-#!/usr/bin/python
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to You under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""
- This script is a translation of the ant.bat file into Python.
-
- The script is intended to be used with the bash shell, on systems with a
- posix shell, but where python may have better string processing abilities,
- like Cygwin
-"""
-import sys
+          # Create a simple Python 3 compatible runant.py script
+          cat > ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py << 'EOF'
+#!/usr/bin/env python3
+# Python 3 compatible version of runant.py
 import os
-import re
+import sys
 
-def find_in_path(file_name):
-  """
-  Search for a file in the PATH environment variable
-  """
-  paths = []
-  if "PATH" in os.environ:
-    paths = os.environ["PATH"].split(os.pathsep)
-
-  for path in paths:
-    if os.path.isfile(os.path.join(path, file_name)):
-      return path
-  
-  # Not found
-  return None
-
-def fixpath(path):
-  """
-  Convert a windows path to a unix path for cygwin
-  """
-  if sys.platform == "cygwin":
-    return pipe("cygpath -u " + path)
-  else:
-    return path
-
-def pipe(cmd):
-  """
-  Return the results of a shell command
-  """
-  return os.popen(cmd).read().strip()
-
-def which(filename):
-  """
-  Search for a file in the PATH
-  """
-  path = find_in_path(filename)
-  if path:
-    return os.path.join(path, filename)
-  else:
-    return filename
-
-
-# Help text
-if len(sys.argv) == 2 and (sys.argv[1] == "-h" or sys.argv[1] == "--help"):
-  print("Usage: runant.py [script options] [options] [target [target2 [target3] ...]]")
-  sys.exit(0)
-
-# Find Java
-java_home = None
-if "JAVA_HOME" in os.environ and os.environ["JAVA_HOME"]:
-  java_home = fixpath(os.environ["JAVA_HOME"])
-  
-if not java_home or not os.path.isdir(java_home):
-  print("Warning: JAVA_HOME is not defined correctly.")
-  print("         ANT cannot execute java.")
-
-ANT_HOME = None
-if "ANT_HOME" in os.environ and os.environ["ANT_HOME"]:
-  ANT_HOME = fixpath(os.environ["ANT_HOME"])
-
-if not ANT_HOME or not os.path.isdir(ANT_HOME):
-  print("Warning: ANT_HOME is not defined correctly.")
-  print("         ANT cannot execute.")
-  sys.exit(1)
-
-def GetJavaRuntime(JAVA_HOME):
-  # Look for JAVA_HOME/jre/bin/java
-  if JAVA_HOME and os.path.isdir(JAVA_HOME + "/jre/bin/"):
-    java_runtime = JAVA_HOME + "/jre/bin/java"
-    if sys.platform == "cygwin":
-      java_runtime = pipe("cygpath --unix " + java_runtime)
-    return java_runtime
+def main():
+    # Print usage if help flag is provided
+    if len(sys.argv) == 2 and (sys.argv[1] == "-h" or sys.argv[1] == "--help"):
+        print("Usage: runant.py [script options] [options] [target [target2 [target3] ...]]")
+        sys.exit(0)
     
-  # Determine Java runtime from PATH environment
-  return which("java")
+    # Check JAVA_HOME
+    java_home = os.environ.get("JAVA_HOME", "")
+    if not java_home or not os.path.isdir(java_home):
+        print("Warning: JAVA_HOME is not defined correctly.")
+        print("         ANT cannot execute java.")
+    
+    # Check ANT_HOME
+    ant_home = os.environ.get("ANT_HOME", "")
+    if not ant_home or not os.path.isdir(ant_home):
+        print("Warning: ANT_HOME is not defined correctly.")
+        print("         ANT cannot execute.")
+        sys.exit(1)
+    
+    # Get Java command
+    java_cmd = os.environ.get("JAVACMD", "")
+    if not java_cmd:
+        if os.path.isdir(os.path.join(java_home, "jre/bin")):
+            java_cmd = os.path.join(java_home, "jre/bin/java")
+        else:
+            java_cmd = "java"
+    
+    # Get ANT options
+    ant_opts = os.environ.get("ANT_OPTS", "")
+    if "-Xmx" not in ant_opts:
+        ant_opts += " -Xmx512m"
+    
+    # Build command arguments
+    args = sys.argv[1:]
+    ant_args = " ".join(args)
+    
+    # Get Ant jar path
+    ant_jar = os.path.join(ant_home, "lib/ant.jar")
+    
+    # Build and execute command
+    cmd = f"{java_cmd} {ant_opts} -classpath {ant_jar} -Dant.home={ant_home} org.apache.tools.ant.Main {ant_args}"
+    os.system(cmd)
 
-def GetAntRuntime(ANT_HOME):
-  "Locate the Ant jar file"
-  path = ANT_HOME + "/lib/ant.jar"
-  if sys.platform == "cygwin":
-    path = pipe("cygpath --unix " + path)
-  return path
-
-def RunAnt(java_runtime, ant_jar_path, ant_opts, ant_args):
-  "Execute ant"
-  if sys.platform == "cygwin":
-    # Convert ant parameters to windows format
-    ant_args = pipe("cygpath --windows " + ant_args)
-  cmd = java_runtime + " " + ant_opts + " -classpath " + ant_jar_path + " -Dant.home=" + ANT_HOME + " org.apache.tools.ant.Main " + ant_args
-  os.system(cmd)
-
-JAVACMD = None
-if "JAVACMD" in os.environ and os.environ["JAVACMD"]:
-  JAVACMD = pipe(os.environ["JAVACMD"])
-else:
-  JAVACMD = GetJavaRuntime(java_home)
-
-# Build the parameters
-ANT_OPTS = ""
-if "ANT_OPTS" in os.environ and os.environ["ANT_OPTS"]:
-  ANT_OPTS = os.environ["ANT_OPTS"]
-
-args = sys.argv[1:]
-ANT_ARGS = " ".join(args)  # Use " ".join() instead of string.join() for Python 3 compatibility
-
-# Set the max java heap size
-if ANT_OPTS.find("-Xmx") == -1:
-  ANT_OPTS = ANT_OPTS + " -Xmx512m"
-
-# Run Ant
-RunAnt(JAVACMD, GetAntRuntime(ANT_HOME), ANT_OPTS, ANT_ARGS)
+if __name__ == "__main__":
+    main()
 EOF
           
           # Make the script executable
-          chmod +x apache-ant-1.9.4/bin/runant.py
+          chmod +x ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py
           
-          # Verify that the script was patched
-          echo "Verifying runant.py patch..."
-          grep "print(" apache-ant-1.9.4/bin/runant.py
+          # Verify that the script was created
+          echo "Verifying runant.py was created..."
+          ls -la ~/.buildozer/android/platform/apache-ant-1.9.4/bin/
+          
+          # Preemptively download Apache Ant
+          mkdir -p ~/.buildozer/android/platform
+          cd ~/.buildozer/android/platform
+          
+          echo "Downloading Apache Ant..."
+          curl -L https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -o apache-ant-1.9.4-bin.tar.gz
+          
+          echo "Extracting Apache Ant..."
+          tar -xzf apache-ant-1.9.4-bin.tar.gz
+          
+          # Ensure our patched runant.py is in place
+          echo "Ensuring patched runant.py is in place..."
+          cp -f ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py apache-ant-1.9.4/bin/runant.py
+          chmod +x apache-ant-1.9.4/bin/runant.py
           
           echo "Apache Ant setup complete"
 
@@ -331,7 +250,7 @@ EOF
           # Check if the ant scripts are patched correctly
           echo "Checking if runant.py is patched correctly..."
           if [ -f ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py ]; then
-            grep "print(" ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py
+            head -n 10 ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py
           else
             echo "Warning: runant.py not found where expected"
           fi
