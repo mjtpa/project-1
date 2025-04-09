@@ -49,10 +49,9 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install --upgrade pip wheel setuptools==65.5.0
           python -m pip install cython==0.29.33 buildozer==1.4.0
           python -m pip install kivy==2.1.0 pillow arabic-reshaper python-bidi
-          python -m pip install setuptools==65.5.0  # إصلاح مشكلة distutils
 
       - name: Install Android SDK
         run: |
@@ -122,8 +121,8 @@ EOL
 
       - name: Build APK with Buildozer
         run: |
-          # تعطيل تحذيرات distutils
           export PYTHONWARNINGS="ignore:The distutils package is deprecated"
+          find ~/.buildozer -name "windows_support*" -delete
           
           buildozer android clean || true
           export GRADLE_OPTS="-Xmx2048m -XX:MaxPermSize=512m"
