@@ -121,11 +121,11 @@ warn_on_root = 1' > buildozer.spec
         run: |
           export PYTHONWARNINGS="ignore:The distutils package is deprecated"
           find ~/.buildozer -name "windows_support*" -delete
-          
+
           buildozer android clean || true
           export GRADLE_OPTS="-Xmx2048m -XX:MaxPermSize=512m"
           buildozer -v android debug 2>&1 | tee build.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+          if [ "${PIPESTATUS[0]}" -ne 0 ]; then
             echo "=== Build Log ==="
             cat build.log
             echo "=== Debug Info ==="
