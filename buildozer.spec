@@ -15,7 +15,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json,gif
 
 # (list) List of inclusions using pattern matching
-source.include_patterns = default_album_cover.gif, fonts/*, *.json
+source.include_patterns = default_album_cover.gif, fonts/*, *.json, theme.json, playlist.json
 
 # (list) Source files to exclude (let empty to not exclude anything)
 source.exclude_exts = spec
@@ -80,6 +80,13 @@ fullscreen = 0
 
 # (str) Path to a custom build process manifest
 p4a.branch = develop
+
+# (bool) Skip certain build steps (for faster debugging)
+# This is useful for CI environments
+p4a.local_recipes = ~/.buildozer/android/platform/python-for-android/recipes
+
+# (bool) If you're having boot-time memory issues, try to set these
+android.extra_args = --release, --ignore-setup-py
 
 [buildozer]
 # (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
