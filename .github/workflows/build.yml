@@ -4,23 +4,20 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # للسماح بتشغيل يدوي
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      # 1. التحقق من الكود
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. إعداد Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 3. تثبيت الاعتمادات الأساسية
       - name: Install dependencies
         run: |
           sudo apt update && sudo apt install -y \
@@ -41,12 +38,9 @@ jobs:
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
           echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
 
-          # تثبيت الحزم بايثون المطلوبة
-          pip install --upgrade pip wheel setuptools cython==0.29.33 buildozer pillow
+          # تثبيت مكتبات بايثون الأساسية
           pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow
 
-
-      # 4. تثبيت Android SDK
       - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
@@ -63,11 +57,9 @@ jobs:
 
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
-          # إنشاء رابط رمزي لتلبية توقع Buildozer
           sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
           sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
 
-      # 5. الكاش لمجلدات Buildozer
       - name: Cache Buildozer directories
         uses: actions/cache@v3
         with:
@@ -76,7 +68,6 @@ jobs:
             .buildozer
           key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
 
-      # 6. تجهيز الملفات الأساسية
       - name: Prepare required files
         run: |
           if [ ! -f "default_album_cover.gif" ]; then
@@ -96,7 +87,6 @@ jobs:
           echo "Current directory structure:"
           find . -type f -not -path "./.git/*" | sort
 
-      # 7. تعديل ملف _img_sdl2.pyx لإضافة noexcept
       - name: Patch _img_sdl2.pyx for noexcept compatibility
         run: |
           pip install kivy==2.1.0
@@ -112,7 +102,6 @@ jobs:
             find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
           fi
 
-      # 8. بناء التطبيق باستخدام Buildozer
       - name: Build with Buildozer
         run: |
           export ANDROIDSDK=/opt/android-sdk
@@ -127,7 +116,6 @@ jobs:
             exit 1
           fi
 
-      # 9. رفع ملف الـ APK كـ Artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
