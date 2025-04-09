@@ -1,18 +1,18 @@
 [app]
 # (str) Title of your application
-title = My Application
+title = PythonProject1
 
 # (str) Package name
-package.name = myapp
+package.name = pythonproject1
 
 # (str) Package domain (needed for android/ios packaging)
-package.domain = org.test
+package.domain = org.pythonproject1
 
 # (str) Source code where the main.py lives
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,ttf
+source.include_exts = py,png,jpg,kv,atlas,ttf,json
 
 # (str) Application versioning (method 1)
 version = 0.1
@@ -35,7 +35,13 @@ android.accept_sdk_license = True
 # Use the SDK directory path here, not sdkmanager
 android.sdk_path = /opt/android-sdk
 
-# (list) Supported orientations
+# (str) Presplash of the application
+#presplash.filename = %(source.dir)s/data/presplash.png
+
+# (str) Icon of the application
+#icon.filename = %(source.dir)s/data/icon.png
+
+# (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
 orientation = portrait
 
 # (list) The Android archs to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
@@ -43,6 +49,16 @@ android.archs = arm64-v8a, armeabi-v7a
 
 # (bool) enables Android auto backup feature (Android API >=23)
 android.allow_backup = True
+
+# (str) Android entry point, default is ok for Kivy-based app
+#android.entrypoint = org.kivy.android.PythonActivity
+
+# (bool) Indicate if the application should be fullscreen or not
+fullscreen = 0
+
+# (str) The format used for the signature. The default is PKCS1, but for
+# newer applications, PKCS1 with SHA256 is preferred.
+android.keystore_signature_algorithm = PKCS1withRSA
 
 [buildozer]
 # (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
