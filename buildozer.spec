@@ -52,3 +52,6 @@ warn_on_root = 1
 [pythonforandroid]
 
 # Optional: Add any extra build options here
+
+# Add this section to accept licenses automatically
+pre_build = yes | $ANDROIDSDK/cmdline-tools/latest/bin/sdkmanager --licenses
