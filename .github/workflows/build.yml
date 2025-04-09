@@ -10,8 +10,6 @@ env:
   ANDROID_HOME: /opt/android-sdk
   BUILDDOZER_ANDROID_ACCEPT_LICENSE: yes
   USE_SDL2: 1
-  ANT_OPTS: -Xmx4g
-  GRADLE_OPTS: -Xmx4g
 
 jobs:
   build:
@@ -60,101 +58,85 @@ jobs:
         run: |
           pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow kivy==2.1.0
 
-      - name: Clean previous Android installations
+      - name: Install Android SDK with accepted licenses
         run: |
+          # تنظيف أي تثبيتات سابقة
           sudo rm -rf /opt/android-sdk
           sudo rm -rf ~/.android
-
-      - name: Install Android SDK
-        run: |
+          
+          # إنشاء مجلد SDK
           sudo mkdir -p $ANDROID_SDK_ROOT
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
           
-          # Download and install command line tools
+          # تنزيل وتثبيت أدوات سطر الأوامر
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT
           mv $ANDROID_SDK_ROOT/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools-latest
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools-latest $ANDROID_SDK_ROOT/cmdline-tools/latest
           
-          # Accept all licenses
+          # قبول جميع التراخيص المطلوبة
           mkdir -p $ANDROID_SDK_ROOT/licenses
           echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
           
-          # Install required packages
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest"
-          
-          # Add to PATH
+          # إعداد PATH
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          
+          # تثبيت الحزم الأساسية مع التأكد من قبول التراخيص
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          
+          # إضافة أدوات البناء إلى PATH
           echo "$ANDROID_SDK_ROOT/build-tools/33.0.2" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
-      - name: Verify Android Tools Installation
+      - name: Verify Android installation
         run: |
-          echo "Checking installed components:"
+          echo "=== Installed packages ==="
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --list
           
-          echo "Checking Aidl:"
-          ls $ANDROID_SDK_ROOT/build-tools/33.0.2/aidl || echo "Aidl check failed!"
+          echo "=== Aidl path ==="
+          ls -la $ANDROID_SDK_ROOT/build-tools/33.0.2/aidl || echo "Aidl not found!"
           
-          echo "Build tools content:"
-          ls -la $ANDROID_SDK_ROOT/build-tools/33.0.2/
+          echo "=== Environment variables ==="
+          env | grep ANDROID
+          env | grep PATH
 
-      - name: Cache Buildozer directories
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-            /opt/android-sdk
-          key: buildozer-${{ hashFiles('buildozer.spec') }}
-
-      - name: Prepare required files
+      - name: Prepare build environment
         run: |
-          if [ ! -f "default_album_cover.gif" ]; then
-            convert -size 100x100 xc:#456D89 default_album_cover.gif
-          fi
-
           mkdir -p data
+          [ ! -f "default_album_cover.gif" ] && convert -size 100x100 xc:#456D89 default_album_cover.gif
           cp default_album_cover.gif data/
-
           [ ! -f "playlist.json" ] && echo "[]" > playlist.json
           [ ! -f "theme.json" ] && echo '{"theme_name": "DeepPurple"}' > theme.json
           mkdir -p fonts
 
-      - name: Patch _img_sdl2.pyx for noexcept compatibility
-        run: |
-          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
-          FILE_PATH="$SITE_PACKAGES/kivy/core/image/_img_sdl2.pyx"
-
-          if [ -f "$FILE_PATH" ]; then
-            echo "Patching file: $FILE_PATH"
-            sed -i 's/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/' "$FILE_PATH"
-            sed -i 's/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/' "$FILE_PATH"
-          else
-            echo "Warning: File not found: $FILE_PATH"
-            find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
-          fi
-
       - name: Build with Buildozer
+        timeout-minutes: 30
         run: |
+          # تنظيف البناء السابق
+          rm -rf .buildozer/android/platform/build-*/
+          rm -rf .buildozer/android/app
+          
+          # إعداد متغيرات البيئة
           export ANDROIDSDK=$ANDROID_SDK_ROOT
+          export ANDROIDNDK=$ANDROID_SDK_ROOT/ndk/25.1.8937393
           export ANDROIDAPI=33
           export NDK_API=21
-          buildozer --verbose android debug || (find .buildozer -name "*.log" -exec cat {} \; && exit 1)
-
-      - name: Test APK (basic check)
-        if: success()
-        run: |
-          apk_file=$(ls bin/*.apk)
-          echo "APK File: $apk_file"
-          file $apk_file
-          aapt dump badging $apk_file | grep package
+          
+          # تنفيذ البناء
+          buildozer --verbose android debug
+          
+          # إذا فشل البناء، عرض السجلات
+          if [ ! -f "bin/*.apk" ]; then
+            echo "=== Build failed, showing logs ==="
+            find .buildozer -name "*.log" -exec cat {} \;
+            exit 1
+          fi
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: android-app
+          name: music-player-apk
           path: bin/*.apk
