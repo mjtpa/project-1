@@ -1,18 +1,16 @@
 [app]
 
-# عنوان التطبيق
+# Basic application information
 title = MusicPlayer
-
-# معلومات الحزمة
 package.name = musicplayer
 package.domain = org.test
 
-# إعدادات البناء
+# Version information
 version = 0.1
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,gif,ttf,otf
 
-# المتطلبات
+# Python dependencies
 requirements = 
     python3,
     kivy==2.1.0,
@@ -24,36 +22,41 @@ requirements =
     mutagen,
     wheel
 
-# إعدادات الشاشة
+# Orientation and display
 orientation = portrait
 fullscreen = 0
 
-# الأيقونات
+# Graphics assets
 icon.filename = %(source.dir)s/icon.png
 presplash.filename = %(source.dir)s/data/default_album_cover.gif
 
-# الأذونات
+# Android permissions
 android.permissions = 
     READ_EXTERNAL_STORAGE,
     WRITE_EXTERNAL_STORAGE,
     INTERNET
 
-# إعدادات Android SDK
+# Android API settings
 android.api = 33
 android.minapi = 21
-android.ndk_api = 21
-android.sdk = 33
 android.ndk = 25.1.8937393
+android.ndk_path = /opt/android-ndk/25.1.8937393
+android.ndk_api = 21
 android.archs = arm64-v8a,armeabi-v7a
 
-# خيارات البناء
+# Build behavior
 bootstrap = sdl2
 p4a.branch = master
 android.multi_touch = 1
 android.hide_titlebar = 0
 android.window_soft_input_mode = adjustResize
+android.accept_sdk_license = True
 
-# تضمين الملفات الإضافية
+# Build tools version constraints
+android.build_tools_min_version = 33.0.2
+android.build_tools_max_version = 33.0.2
+
+# Additional files to include
 include_patterns = 
     assets/*,
     fonts/*.ttf,
@@ -61,28 +64,50 @@ include_patterns =
     data/*.json,
     data/*.gif
 
-# إعدادات Buildozer
+# Performance optimizations
+android.enable_androidx = True
+android.enable_jetifier = True
+
+# Debugging options
+log_level = 2
+android.allow_background = true
+
+##############################################
+# Buildozer configuration section
+##############################################
 [buildozer]
+
+# Logging and behavior
 log_level = 2
 warn_on_root = 1
 
-#############################################
-# إعدادات إضافية مهمة لمنع الأخطاء
-#############################################
+##############################################
+# Python for Android configuration
+##############################################
+[pythonforandroid]
 
-# قبول التراخيص تلقائياً
-android.accept_sdk_license = True
+# Recipe modifications if needed
+# recipes.python = python3
 
-# إعدادات NDK
-android.ndk_path = /opt/android-ndk/
+##############################################
+# Android specific configurations
+##############################################
+[android]
 
-# إعدادات OpenJDK
-android.java_jdk_path = /usr/lib/jvm/java-17-openjdk-amd64
+# Release signing (uncomment and fill for release builds)
+# key.store = %(source.dir)s/keystore.jks
+# key.store.password = yourpassword
+# key.alias = youralias
+# key.alias.password = youraliaspassword
 
-# منع استخدام build-tools 36
-android.build_tools_min_version = 33.0.2
-android.build_tools_max_version = 33.0.2
+# NDK optimizations
+android.extra_ndk_args = -O3 -fstrict-aliasing
 
-# تحسينات للأداء
-android.enable_androidx = True
-android.enable_jetifier = True
+##############################################
+# iOS specific configurations (optional)
+##############################################
+[ios]
+
+# Uncomment and fill if building for iOS
+# ios.kivy_ios_url = https://github.com/kivy/kivy-ios
+# ios.kivy_ios_branch = master
