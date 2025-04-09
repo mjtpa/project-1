@@ -12,13 +12,16 @@ package.domain = org.pythonproject1
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,ttf,json
+source.include_exts = py,png,jpg,kv,atlas,ttf,json,gif
+
+# (list) Application data sources
+source.data = data/default_album_cover.gif
 
 # (str) Application versioning (method 1)
 version = 0.1
 
 # (list) Application requirements
-requirements = python3,kivy==2.2.1,pillow,arabic_reshaper,python-bidi,cython==0.29.36
+requirements = python3,kivy==2.2.1,kivymd==1.1.1,pillow,arabic_reshaper,python-bidi,cython==0.29.36,mutagen,sdl2_ttf==2.0.18,sdl2_image==2.0.5,sdl2_mixer==2.0.4
 
 
 
@@ -56,9 +59,24 @@ android.allow_backup = True
 # (bool) Indicate if the application should be fullscreen or not
 fullscreen = 0
 
+# (list) Permissions
+android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+
 # (str) The format used for the signature. The default is PKCS1, but for
 # newer applications, PKCS1 with SHA256 is preferred.
 android.keystore_signature_algorithm = PKCS1withRSA
+
+# (bool) Copy library instead of making a libpymodules.so
+android.copy_libs = 1
+
+# (int) Android logcat verbosity (defaults to 2)
+android.logcat_level = 2
+
+# (str) Android logcat filters to use
+android.logcat_filters = *:S python:D
+
+# (bool) Disable Android optimization
+android.optimize = 0
 
 [buildozer]
 # (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
