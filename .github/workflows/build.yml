@@ -14,7 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. إعداد Python وإعداد البيئة
+      # 2. إعداد Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -36,13 +36,13 @@ jobs:
             libsqlite3-dev \
             zlib1g-dev \
             python3-pip \
-            imagemagick  # لإنشاء الصور الافتراضية إذا كانت مفقودة
-          
+            imagemagick
+
           echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
           echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
-          
-          # تثبيت Buildozer مع إصدار محدد من Cython لتوافق أفضل
-          pip install --upgrade pip cython==0.29.33 buildozer pillow
+
+          # تثبيت الحزم بايثون المطلوبة
+          pip install --upgrade pip wheel setuptools cython==0.29.33 buildozer pillow
 
       # 4. تثبيت Android SDK
       - name: Install Android SDK
@@ -54,18 +54,18 @@ jobs:
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
           unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          
+
           mkdir -p $ANDROID_SDK_ROOT/licenses
           echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
-          
+
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          
+
           # إنشاء رابط رمزي لتلبية توقع Buildozer
           sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
           sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
 
-      # 5. استخدام الكاش لمجلدات Buildozer لتسريع البناء
+      # 5. الكاش لمجلدات Buildozer
       - name: Cache Buildozer directories
         uses: actions/cache@v3
         with:
@@ -74,66 +74,39 @@ jobs:
             .buildozer
           key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
 
-      # 6. التأكد من وجود الم��فات اللازمة للبناء
+      # 6. تجهيز الملفات الأساسية
       - name: Prepare required files
         run: |
-          # التأكد من وجود ملف default_album_cover.gif
           if [ ! -f "default_album_cover.gif" ]; then
             echo "Creating default_album_cover.gif"
             convert -size 100x100 xc:#456D89 default_album_cover.gif
           fi
-          
-          # إنشاء مجلد data إذا لم يكن موجودًا
+
           mkdir -p data
-          
-          # نسخ ملف default_album_cover.gif إلى مجلد data
           cp default_album_cover.gif data/
-          
-          # إنشاء ملفات JSON فارغة إذا لم تكن موجودة
-          if [ ! -f "playlist.json" ]; then
-            echo "[]" > playlist.json
-          fi
-          
-          if [ ! -f "theme.json" ]; then
-            echo '{"theme_name": "DeepPurple"}' > theme.json
-          fi
-          
-          if [ ! -f "data/playlist.json" ]; then
-            echo "[]" > data/playlist.json
-          fi
-          
-          if [ ! -f "data/theme.json" ]; then
-            echo '{"theme_name": "DeepPurple"}' > data/theme.json
-          fi
-          
-          # إنشاء مجلد fonts إذا لم يكن موجودًا
+
+          [ ! -f "playlist.json" ] && echo "[]" > playlist.json
+          [ ! -f "theme.json" ] && echo '{"theme_name": "DeepPurple"}' > theme.json
+          [ ! -f "data/playlist.json" ] && echo "[]" > data/playlist.json
+          [ ! -f "data/theme.json" ] && echo '{"theme_name": "DeepPurple"}' > data/theme.json
           mkdir -p fonts
-          
-          # عرض هيكل الملفات للتحقق
+
           echo "Current directory structure:"
           find . -type f -not -path "./.git/*" | sort
 
-      # 7. تطبيق Patch لتعديل ملف _img_sdl2.pyx لإضافة "noexcept"
+      # 7. تعديل ملف _img_sdl2.pyx لإضافة noexcept
       - name: Patch _img_sdl2.pyx for noexcept compatibility
         run: |
-          # تثبيت kivy مؤقتًا للحصول على الملفات
           pip install kivy==2.1.0
-          
-          # البحث عن الملف
           SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
           FILE_PATH="$SITE_PACKAGES/kivy/core/image/_img_sdl2.pyx"
-          
+
           if [ -f "$FILE_PATH" ]; then
             echo "Patching file: $FILE_PATH"
-            
-            # تحديث الملف مع إضافة noexcept
             sed -i 's/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/' "$FILE_PATH"
             sed -i 's/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/' "$FILE_PATH"
-            
-            echo "Patch applied successfully"
           else
-            echo "Warning: File _img_sdl2.pyx not found at $FILE_PATH"
-            # البحث في مواقع ��خرى محتملة
+            echo "Warning: File not found: $FILE_PATH"
             find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
           fi
 
@@ -143,19 +116,16 @@ jobs:
           export ANDROIDSDK=/opt/android-sdk
           export ANDROIDAPI=33
           export NDK_API=21
-          
-          # تشغيل الأمر مع قفل زمني كافي
           timeout 60m buildozer --verbose android debug
-          
-          # التحقق من وجود ملف APK
+
           if [ ! -f "bin/musicplayer-0.1-arm64-v8a_armeabi-v7a-debug.apk" ]; then
-            echo "APK not found. Checking build logs for errors:"
+            echo "APK not found. Checking logs..."
             find .buildozer -name "build.err.log" -exec cat {} \;
             find .buildozer -name "log*.txt" -exec cat {} \;
             exit 1
           fi
 
-      # 9. رفع الـ APK كـ artifact
+      # 9. رفع ملف الـ APK كـ Artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
