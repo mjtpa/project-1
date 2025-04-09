@@ -73,7 +73,7 @@ jobs:
         env:
           ANDROID_NDK_ROOT: /opt/android-ndk
         run: |
-          wget https://dl.google.com/android/repository/android-ndk-r25.1.8937393-linux.zip -O android-ndk.zip
+          wget https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -O android-ndk.zip
           unzip android-ndk.zip -d $ANDROID_NDK_ROOT
           rm android-ndk.zip
 
