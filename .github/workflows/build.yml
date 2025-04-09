@@ -41,6 +41,15 @@ jobs:
           # تثبيت مكتبات بايثون الأساسية
           pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow
 
+      - name: Install Apache Ant
+        run: |
+          wget https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz
+          tar -xzf apache-ant-1.9.4-bin.tar.gz
+          rm apache-ant-1.9.4-bin.tar.gz
+          export ANT_HOME=/home/runner/.buildozer/android/platform/apache-ant-1.9.4
+          echo "export PATH=\$PATH:\$ANT_HOME/bin" >> ~/.bashrc
+          source ~/.bashrc
+
       - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
@@ -59,6 +68,14 @@ jobs:
 
           sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
           sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
+
+      - name: Install Android NDK
+        env:
+          ANDROID_NDK_ROOT: /opt/android-ndk
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r25.1.8937393-linux.zip -O android-ndk.zip
+          unzip android-ndk.zip -d $ANDROID_NDK_ROOT
+          rm android-ndk.zip
 
       - name: Cache Buildozer directories
         uses: actions/cache@v3
