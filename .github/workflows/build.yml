@@ -43,6 +43,8 @@ jobs:
 
           # تثبيت الحزم بايثون المطلوبة
           pip install --upgrade pip wheel setuptools cython==0.29.33 buildozer pillow
+          pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow
+
 
       # 4. تثبيت Android SDK
       - name: Install Android SDK
