@@ -1919,40 +1919,89 @@ if platform != 'android' and platform != 'ios':
     Window.size = (360, 640)
 
 def main():
+    """Main application entry point with comprehensive error handling."""
     try:
-        # Ensure data directory exists
+        # طباعة معلومات النظام لتسهيل تتبع الأخطاء
+        import platform as plt
+        print(f"Python: {plt.python_version()}")
+        print(f"Platform: {plt.system()} {plt.release()}")
+        
+        try:
+            from kivy import require
+            require('2.1.0')  # تحديد إصدار معين من Kivy
+            from kivy.logger import Logger
+            Logger.info("Application: Starting Music Player")
+        except Exception as kv_err:
+            print(f"Kivy initialization warning (non-fatal): {kv_err}")
+        
+        # تأكد من وجود مجلد البيانات
         data_dir = 'data'
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
+            print(f"Created data directory: {data_dir}")
             
-        # Check for default album cover
-        default_img = os.path.join(data_dir, 'default_album_cover.gif')
+        # التحقق من وجود ملف الصورة الافتراضية
+        default_img = 'default_album_cover.gif'
         app_dir = os.path.dirname(os.path.abspath(__file__))
-        default_source = os.path.join(app_dir, 'default_album_cover.gif')
+        default_source = os.path.join(app_dir, default_img)
+        data_img = os.path.join(data_dir, default_img)
         
         # Copy or create default album cover if missing
-        if not os.path.exists(default_img):
+        if not os.path.exists(data_img):
             if os.path.exists(default_source):
                 import shutil
-                shutil.copy(default_source, default_img)
+                shutil.copy2(default_source, data_img)
+                print(f"Copied default image from {default_source} to {data_img}")
             else:
                 # Create a simple image if the default is missing
                 try:
                     from PIL import Image
                     img = Image.new('RGB', (100, 100), color=(73, 109, 137))
-                    img.save(default_img)
+                    img.save(data_img)
+                    print(f"Created default image placeholder: {data_img}")
+                except ImportError:
+                    print("PIL not available; cannot create default image")
                 except Exception as img_err:
-                    print(f"Could not create default image: {img_err}")
+                    print(f"Warning: Could not create default image: {img_err}")
         
-        # Start the app with error handling
+        # بدء التطبيق الرئيسي مع التقاط الأخطاء
+        print("Starting Music Player application...")
         MusicPlayerApp().run()
+        
     except Exception as e:
-        # Write errors to log file for debugging
+        # كتابة الأخطاء إلى ملف سجل للتصحيح
         error_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'error_log.txt')
-        with open(error_log, 'w') as f:
-            f.write(f"Error: {str(e)}\n")
+        with open(error_log, 'w', encoding='utf-8') as f:
+            f.write(f"FATAL ERROR: {str(e)}\n\n")
             f.write(traceback.format_exc())
-        print(f"Error: {str(e)}")
+            
+            # إضافة معلومات النظام
+            try:
+                import sys
+                f.write("\n\n--- SYSTEM INFORMATION ---\n")
+                f.write(f"Python: {sys.version}\n")
+                f.write(f"Platform: {sys.platform}\n")
+                
+                # معلومات المكتبات
+                f.write("\n--- LIBRARY VERSIONS ---\n")
+                try:
+                    import kivy
+                    f.write(f"Kivy: {kivy.__version__}\n")
+                except:
+                    f.write("Kivy: Not found\n")
+                    
+                try:
+                    import kivymd
+                    f.write(f"KivyMD: {kivymd.__version__}\n")
+                except:
+                    f.write("KivyMD: Not found\n")
+                
+            except:
+                f.write("Could not gather system information")
+                
+        print(f"FATAL ERROR: {str(e)}")
+        print(f"Details have been logged to {error_log}")
+        print("Please check the error log for more information.")
         traceback.print_exc()
 
 if __name__ == '__main__':
