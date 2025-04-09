@@ -509,67 +509,97 @@ class MusicPlayer(BoxLayout):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Load saved theme
-        self.load_theme()
-        Clock.schedule_once(self.set_transition, 0)
-        Clock.schedule_interval(self.update_progress, 0.1)
-        Window.bind(size=self.adjust_layout)
-        self._bottom_bar_touch_time = 0
-        self._bottom_bar_touch_pos = (0, 0)
+        try:
+            # Create data directory if it doesn't exist
+            data_dir = 'data'
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+                
+            # Load saved theme
+            self.load_theme()
+            
+            # Schedule UI updates
+            Clock.schedule_once(self.set_transition, 0)
+            Clock.schedule_interval(self.update_progress, 0.1)
+            Window.bind(size=self.adjust_layout)
+            self._bottom_bar_touch_time = 0
+            self._bottom_bar_touch_pos = (0, 0)
 
-        # تحديث الإعدادات المدعومة - توسيع قائمة الصيغ المدعومة
-        self.supported_formats = [
-            # Common formats
-            '.mp3',  # MPEG Layer-3
-            '.wav',  # Waveform Audio File
-            '.ogg',  # Ogg Vorbis
-            '.flac',  # Free Lossless Audio Codec
-            '.m4a',  # MPEG-4 Audio
-            '.aac',  # Advanced Audio Coding
-            '.wma',  # Windows Media Audio
-            '.aiff',  # Audio Interchange File Format
-            '.alac',  # Apple Lossless Audio Codec
-            '.opus',  # Opus Audio Format
+            # تحديث الإعدادات المدعومة - توسيع قائمة الصيغ المدعومة
+            self.supported_formats = [
+                # Common formats
+                '.mp3',  # MPEG Layer-3
+                '.wav',  # Waveform Audio File
+                '.ogg',  # Ogg Vorbis
+                '.flac',  # Free Lossless Audio Codec
+                '.m4a',  # MPEG-4 Audio
+                '.aac',  # Advanced Audio Coding
+                '.wma',  # Windows Media Audio
+                '.aiff',  # Audio Interchange File Format
+                '.alac',  # Apple Lossless Audio Codec
+                '.opus',  # Opus Audio Format
 
-            # Additional formats
-            '.mp2',  # MPEG Layer-2
-            '.mp4',  # MPEG-4 Audio Container
-            '.ape',  # Monkey's Audio
-            '.mpc',  # Musepack
-            '.ac3',  # Dolby Digital
-            '.amr',  # Adaptive Multi-Rate
-            '.au',  # Sun Audio
-            '.mid',  # MIDI
-            '.midi',  # MIDI
-            '.ra',  # Real Audio
-            '.rm',  # Real Media
-            '.tta',  # True Audio
-            '.dts',  # Digital Theater Systems
-            '.spx',  # Speex
-            '.gsm',  # GSM
-            '.3gp',  # 3GPP container with audio
-            '.webm',  # WebM Audio
-            '.mka',  # Matroska Audio
-            '.dsf',  # DSD Audio
-            '.dff',  # DSD Audio
-            '.caf',  # Core Audio Format (Apple)
-            '.aif',  # Audio Interchange File Format (alternative extension)
-            '.aifc'  # Audio Interchange File Format Compressed
-        ]
-        self.file_manager = MDFileManager(
-            exit_manager=self.exit_manager,
-            select_path=self.select_path,
-            ext=self.supported_formats
-        )
-        self.playlist = self.load_playlist()
-        self.favorites = self.load_favorites()
-        self.update_playlist_ui()
-        Window.bind(on_request_close=self.on_request_close)
+                # Additional formats
+                '.mp2',  # MPEG Layer-2
+                '.mp4',  # MPEG-4 Audio Container
+                '.ape',  # Monkey's Audio
+                '.mpc',  # Musepack
+                '.ac3',  # Dolby Digital
+                '.amr',  # Adaptive Multi-Rate
+                '.au',  # Sun Audio
+                '.mid',  # MIDI
+                '.midi',  # MIDI
+                '.ra',  # Real Audio
+                '.rm',  # Real Media
+                '.tta',  # True Audio
+                '.dts',  # Digital Theater Systems
+                '.spx',  # Speex
+                '.gsm',  # GSM
+                '.3gp',  # 3GPP container with audio
+                '.webm',  # WebM Audio
+                '.mka',  # Matroska Audio
+                '.dsf',  # DSD Audio
+                '.dff',  # DSD Audio
+                '.caf',  # Core Audio Format (Apple)
+                '.aif',  # Audio Interchange File Format (alternative extension)
+                '.aifc'  # Audio Interchange File Format Compressed
+            ]
+            
+            # Initialize file manager with error handling
+            try:
+                self.file_manager = MDFileManager(
+                    exit_manager=self.exit_manager,
+                    select_path=self.select_path,
+                    ext=self.supported_formats
+                )
+            except Exception as fm_err:
+                print(f"Error initializing file manager: {fm_err}")
+                self.file_manager = None
+                
+            # Load playlists with error handling
+            try:
+                self.playlist = self.load_playlist()
+                self.favorites = self.load_favorites()
+                self.update_playlist_ui()
+            except Exception as pl_err:
+                print(f"Error loading playlists: {pl_err}")
+                self.playlist = []
+                self.favorites = []
+                
+            # Bind window close event
+            Window.bind(on_request_close=self.on_request_close)
 
-        # Set up Android notification action handling
-        from kivy.utils import platform
-        if platform == 'android':
-            self.setup_android_notification_handlers()
+            # Set up Android notification action handling
+            from kivy.utils import platform
+            if platform == 'android':
+                try:
+                    self.setup_android_notification_handlers()
+                except Exception as android_err:
+                    print(f"Error setting up Android notifications: {android_err}")
+                    
+        except Exception as init_err:
+            print(f"Error during initialization: {init_err}")
+            traceback.print_exc()
 
     def set_transition(self, dt):
         self.ids.screen_manager.transition = SlideTransition(direction='up')
@@ -890,23 +920,55 @@ class MusicPlayer(BoxLayout):
         self.update_playlist_ui()
 
     def save_playlist(self):
-        with open("playlist.json", "w") as file:
-            json.dump(self.playlist, file)
+        try:
+            data_dir = 'data'
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            playlist_file = os.path.join(data_dir, "playlist.json")
+            with open(playlist_file, "w") as file:
+                json.dump(self.playlist, file)
+        except Exception as e:
+            print(f"Error saving playlist: {e}")
 
     def load_playlist(self):
-        if os.path.exists("playlist.json"):
-            with open("playlist.json", "r") as file:
-                return json.load(file)
+        try:
+            playlist_file = os.path.join('data', "playlist.json")
+            if os.path.exists(playlist_file):
+                with open(playlist_file, "r") as file:
+                    return json.load(file)
+            else:
+                # Try legacy location
+                if os.path.exists("playlist.json"):
+                    with open("playlist.json", "r") as file:
+                        return json.load(file)
+        except Exception as e:
+            print(f"Error loading playlist: {e}")
         return []
 
     def save_favorites(self):
-        with open("favorites.json", "w") as file:
-            json.dump(self.favorites, file)
+        try:
+            data_dir = 'data'
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            favorites_file = os.path.join(data_dir, "favorites.json")
+            with open(favorites_file, "w") as file:
+                json.dump(self.favorites, file)
+        except Exception as e:
+            print(f"Error saving favorites: {e}")
 
     def load_favorites(self):
-        if os.path.exists("favorites.json"):
-            with open("favorites.json", "r") as file:
-                return json.load(file)
+        try:
+            favorites_file = os.path.join('data', "favorites.json")
+            if os.path.exists(favorites_file):
+                with open(favorites_file, "r") as file:
+                    return json.load(file)
+            else:
+                # Try legacy location
+                if os.path.exists("favorites.json"):
+                    with open("favorites.json", "r") as file:
+                        return json.load(file)
+        except Exception as e:
+            print(f"Error loading favorites: {e}")
         return []
 
     def toggle_favorite(self, path):
@@ -926,9 +988,19 @@ class MusicPlayer(BoxLayout):
 
     def play_track(self, path):
         if self.sound:
-            self.sound.stop()
-            self.sound.unload()
+            try:
+                self.sound.stop()
+                self.sound.unload()
+            except Exception as e:
+                print(f"Error stopping previous track: {e}")
+        
         try:
+            # Verify file exists before attempting to load
+            if not os.path.exists(path):
+                print(f"File not found: {path}")
+                self.show_format_error_dialog(path)
+                return
+                
             self.sound = SoundLoader.load(path)
             if self.sound:
                 self.sound.play()
@@ -943,8 +1015,12 @@ class MusicPlayer(BoxLayout):
                 # Update media notification for the new track
                 from kivy.utils import platform
                 if platform == 'android':
-                    self.update_media_notification()
+                    try:
+                        self.update_media_notification()
+                    except Exception as notif_err:
+                        print(f"Error updating notification: {notif_err}")
             else:
+                print(f"Could not load sound: {path}")
                 self.show_format_error_dialog(path)
         except Exception as e:
             print(f"Error playing track: {e}")
@@ -1079,22 +1155,31 @@ class MusicPlayer(BoxLayout):
         print(f"Repeat is now {'ON' if self.repeat else 'OFF'}")
 
     def update_progress(self, dt):
-        if self.sound and self.sound.state == 'play' and not self.user_seeking:
-            current_pos = self.sound.get_pos()
-            if current_pos >= 0:
-                # Update progress bar instead of slider
-                self.ids.seek_slider_main.value = (
-                                                          current_pos / self.sound.length) * 100 if self.sound.length > 0 else 0
-                self.ids.current_time_main.text = self.format_time(current_pos)
-                self.ids.circular_progress.value = (current_pos / self.sound.length) * 100
-                self.ids.circular_progress.draw()
-                if self.ids.screen_manager.current == 'now_playing':
-                    self.ids.seek_slider_now_playing.value = current_pos
-                    self.ids.current_time_now_playing.text = self.format_time(current_pos)
+        try:
+            if self.sound and hasattr(self.sound, 'state') and self.sound.state == 'play' and not self.user_seeking:
+                try:
+                    current_pos = self.sound.get_pos()
+                    if current_pos >= 0 and hasattr(self.sound, 'length') and self.sound.length > 0:
+                        # Update progress bar instead of slider
+                        try:
+                            self.ids.seek_slider_main.value = (current_pos / self.sound.length) * 100
+                            self.ids.current_time_main.text = self.format_time(current_pos)
+                            self.ids.circular_progress.value = (current_pos / self.sound.length) * 100
+                            self.ids.circular_progress.draw()
+                            
+                            if self.ids.screen_manager.current == 'now_playing':
+                                self.ids.seek_slider_now_playing.value = current_pos
+                                self.ids.current_time_now_playing.text = self.format_time(current_pos)
 
-                # Check if track has finished
-                if current_pos >= self.sound.length - 0.5:
-                    self.on_track_finish()
+                            # Check if track has finished
+                            if current_pos >= self.sound.length - 0.5:
+                                self.on_track_finish()
+                        except Exception as ui_err:
+                            print(f"Error updating UI: {ui_err}")
+                except Exception as pos_err:
+                    print(f"Error getting position: {pos_err}")
+        except Exception as e:
+            print(f"Error in update_progress: {e}")
 
     def start_seek(self, *args):
         instance = args[0]
@@ -1279,7 +1364,11 @@ class MusicPlayer(BoxLayout):
     def save_theme(self):
         """Save the current theme setting to a JSON file."""
         try:
-            with open("theme.json", "w", encoding="utf-8") as file:
+            data_dir = 'data'
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            theme_file = os.path.join(data_dir, "theme.json")
+            with open(theme_file, "w", encoding="utf-8") as file:
                 json.dump({"theme_name": self.theme_name}, file)
             print(f"Theme saved: {self.theme_name}")
         except Exception as e:
@@ -1287,19 +1376,26 @@ class MusicPlayer(BoxLayout):
 
     def load_theme(self):
         """Load the theme setting from a JSON file if it exists and update UI."""
-        if os.path.exists("theme.json"):
-            try:
+        try:
+            theme_file = os.path.join('data', "theme.json")
+            if os.path.exists(theme_file):
+                with open(theme_file, "r", encoding="utf-8") as file:
+                    data = json.load(file)
+                self.theme_name = data.get("theme_name", self.theme_name)
+            elif os.path.exists("theme.json"):
+                # Try legacy location
                 with open("theme.json", "r", encoding="utf-8") as file:
                     data = json.load(file)
                 self.theme_name = data.get("theme_name", self.theme_name)
-                app = MDApp.get_running_app()
-                if app:
-                    app.theme_cls.primary_palette = self.theme_name
-                # Ensure the updated theme applies to all UI components (e.g., bottom bar)
-                self.update_theme()
-                print(f"Theme loaded: {self.theme_name}")
-            except Exception as e:
-                print(f"Error loading theme: {e}")
+                
+            app = MDApp.get_running_app()
+            if app:
+                app.theme_cls.primary_palette = self.theme_name
+            # Ensure the updated theme applies to all UI components (e.g., bottom bar)
+            self.update_theme()
+            print(f"Theme loaded: {self.theme_name}")
+        except Exception as e:
+            print(f"Error loading theme: {e}")
 
     def apply_theme(self, theme_name):
         """Apply the selected theme, update UI and save the setting."""
@@ -1807,10 +1903,57 @@ class MusicPlayerApp(MDApp):
 
     def build(self):
         return MusicPlayer()
+    
+    def on_pause(self):
+        """Allow the app to pause instead of closing"""
+        return True
+        
+    def on_resume(self):
+        """Resume app after pause"""
+        pass
 
 from kivy.core.window import Window
 
-Window.size = (360, 640)
+# Only set window size on desktop platforms
+if platform != 'android' and platform != 'ios':
+    Window.size = (360, 640)
+
+def main():
+    try:
+        # Ensure data directory exists
+        data_dir = 'data'
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+            
+        # Check for default album cover
+        default_img = os.path.join(data_dir, 'default_album_cover.gif')
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        default_source = os.path.join(app_dir, 'default_album_cover.gif')
+        
+        # Copy or create default album cover if missing
+        if not os.path.exists(default_img):
+            if os.path.exists(default_source):
+                import shutil
+                shutil.copy(default_source, default_img)
+            else:
+                # Create a simple image if the default is missing
+                try:
+                    from PIL import Image
+                    img = Image.new('RGB', (100, 100), color=(73, 109, 137))
+                    img.save(default_img)
+                except Exception as img_err:
+                    print(f"Could not create default image: {img_err}")
+        
+        # Start the app with error handling
+        MusicPlayerApp().run()
+    except Exception as e:
+        # Write errors to log file for debugging
+        error_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'error_log.txt')
+        with open(error_log, 'w') as f:
+            f.write(f"Error: {str(e)}\n")
+            f.write(traceback.format_exc())
+        print(f"Error: {str(e)}")
+        traceback.print_exc()
 
 if __name__ == '__main__':
-    MusicPlayerApp().run()
+    main()
