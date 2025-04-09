@@ -33,7 +33,13 @@ jobs:
             libncurses5 \
             zlib1g-dev \
             python3-pip \
-            cython
+            python3-dev
+
+      - name: Install Cython and build dependencies
+        run: |
+          # تثبيت Cython عبر pip بدلاً من apt
+          python -m pip install --upgrade pip setuptools wheel
+          pip install cython==0.29.33
 
       - name: Install Android NDK
         run: |
@@ -43,6 +49,7 @@ jobs:
           unzip -q android-ndk-r25b-linux.zip -d /opt/android-ndk
           mv /opt/android-ndk/android-ndk-r25b /opt/android-ndk/25.1.8937393
           echo "/opt/android-ndk/25.1.8937393" >> $GITHUB_PATH
+          echo "ANDROID_NDK_HOME=/opt/android-ndk/25.1.8937393" >> $GITHUB_ENV
 
       - name: Install Android SDK
         run: |
@@ -60,16 +67,21 @@ jobs:
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/build-tools/33.0.2" >> $GITHUB_PATH
 
-      - name: Install Python dependencies
+      - name: Install Python build dependencies
         run: |
-          pip install --upgrade pip setuptools wheel buildozer
-          pip install cython==0.29.33  # إصدار محدد متوافق مع Kivy
+          pip install buildozer
+          pip install kivy==2.1.0 kivymd==1.1.1 pillow arabic_reshaper python-bidi mutagen
 
       - name: Build with Buildozer
+        timeout-minutes: 45
         run: |
           export ANDROIDSDK=$ANDROID_SDK_ROOT
           export ANDROIDNDK=$ANDROID_NDK_HOME
           export ANDROIDAPI=33
+          
+          # تنظيف البناء السابق
+          rm -rf .buildozer/android/platform/build-*/
+          rm -rf .buildozer/android/app
           
           buildozer --verbose android debug || (find .buildozer -name "*.log" -exec cat {} \; && exit 1)
 
