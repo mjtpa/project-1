@@ -1,435 +1,3 @@
-"""
-Código mejorado para incluir al inicio de tu archivo main.py
-para asegurar la compatibilidad con Android
-"""
-
-# Importaciones estándar
-from kivy.metrics import dp, sp
-from kivy.lang import Builder
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
-from kivy.clock import Clock
-from kivy.core.audio import SoundLoader
-from kivy.properties import ObjectProperty, NumericProperty, BooleanProperty, StringProperty
-from kivy.core.window import Window
-from kivymd.app import MDApp
-
-# Importar soporte para árabe
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    ARABIC_SUPPORT = True
-except ImportError:
-    print("Advertencia: Soporte para árabe no disponible")
-    ARABIC_SUPPORT = False
-
-# Función para formatear texto árabe
-def format_arabic(text):
-    if ARABIC_SUPPORT and isinstance(text, str):
-        try:
-            reshaped_text = arabic_reshaper.reshape(text)
-            return get_display(reshaped_text)
-        except Exception as e:
-            print(f"Error al formatear texto árabe: {e}")
-    return text
-
-# Configuración específica para Android
-from kivy.utils import platform
-
-# Variables globales para Android
-android_api_level = 0
-android_modules_loaded = False
-
-# Inicializar Android
-def init_android():
-    global android_api_level, android_modules_loaded
-    
-    if platform != 'android':
-        return False
-    
-    try:
-        # Importar módulos específicos de Android
-        from jnius import autoclass
-        
-        # Obtener nivel de API de Android
-        Build = autoclass('android.os.Build$VERSION')
-        android_api_level = Build.SDK_INT
-        print(f"Nivel de API de Android: {android_api_level}")
-        
-        # Solicitar permisos en Android
-        from android.permissions import request_permissions, Permission, check_permission
-        
-        # Lista de permisos necesarios
-        permissions = [
-            Permission.INTERNET,
-            Permission.READ_EXTERNAL_STORAGE,
-            Permission.WRITE_EXTERNAL_STORAGE,
-            Permission.FOREGROUND_SERVICE,
-            Permission.WAKE_LOCK
-        ]
-        
-        # Verificar y solicitar permisos
-        missing_permissions = []
-        for permission in permissions:
-            if not check_permission(permission):
-                missing_permissions.append(permission)
-        
-        if missing_permissions:
-            print(f"Solicitando permisos: {missing_permissions}")
-            request_permissions(missing_permissions)
-        
-        # Configurar modo de entrada de teclado
-        Window.softinput_mode = 'below_target'
-        
-        # Configurar para mantener la pantalla encendida
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        activity = PythonActivity.mActivity
-        
-        # Mantener la pantalla encendida
-        PowerManager = autoclass('android.os.PowerManager')
-        Context = autoclass('android.content.Context')
-        
-        # Adquirir wake lock
-        power_manager = activity.getSystemService(Context.POWER_SERVICE)
-        wake_lock = power_manager.newWakeLock(
-            PowerManager.SCREEN_DIM_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE,
-            "MusicPlayer::WakeLock"
-        )
-        wake_lock.acquire()
-        
-        android_modules_loaded = True
-        print("Configuración de Android completada correctamente")
-        return True
-    except Exception as e:
-        print(f"Error en la configuración de Android: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-# Inicializar Android si estamos en esa plataforma
-if platform == 'android':
-    init_android()
-
-# Parches para KivyMD
-try:
-    from kivymd.uix.toolbar.toolbar import ActionTopAppBarButton
-    from kivymd.uix.button import MDIconButton
-    
-    # Establecer radio predeterminado para evitar errores None
-    if not hasattr(ActionTopAppBarButton, 'radius') or ActionTopAppBarButton.radius is None:
-        ActionTopAppBarButton.radius = [dp(24)]
-    
-    if not hasattr(MDIconButton, 'radius') or MDIconButton.radius is None:
-        MDIconButton.radius = [dp(24)]
-except Exception as e:
-    print(f"Error al aplicar parches para KivyMD: {e}")
-
-# Función para obtener la ruta de almacenamiento adecuada según la plataforma
-def get_storage_path():
-    if platform == 'android':
-        try:
-            from android.storage import primary_external_storage_path
-            return primary_external_storage_path()
-        except Exception as e:
-            print(f"Error al obtener ruta de almacenamiento: {e}")
-            from jnius import autoclass
-            Environment = autoclass('android.os.Environment')
-            return Environment.getExternalStorageDirectory().getPath()
-    else:
-        import os
-        return os.path.expanduser('~')
-
-# Configurar tamaño de ventana para desarrollo
-if platform != 'android':
-    Window.size = (400, 700)
-"""
-Código mejorado para incluir al inicio de tu archivo main.py
-para asegurar la compatibilidad con Android
-"""
-
-# Importaciones estándar
-from kivy.metrics import dp, sp
-from kivy.lang import Builder
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
-from kivy.clock import Clock
-from kivy.core.audio import SoundLoader
-from kivy.properties import ObjectProperty, NumericProperty, BooleanProperty, StringProperty
-from kivy.core.window import Window
-from kivymd.app import MDApp
-
-# Importar soporte para árabe
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    ARABIC_SUPPORT = True
-except ImportError:
-    print("Advertencia: Soporte para árabe no disponible")
-    ARABIC_SUPPORT = False
-
-# Función para formatear texto árabe
-def format_arabic(text):
-    if ARABIC_SUPPORT and isinstance(text, str):
-        try:
-            reshaped_text = arabic_reshaper.reshape(text)
-            return get_display(reshaped_text)
-        except Exception as e:
-            print(f"Error al formatear texto árabe: {e}")
-    return text
-
-# Configuración específica para Android
-from kivy.utils import platform
-
-# Variables globales para Android
-android_api_level = 0
-android_modules_loaded = False
-
-# Inicializar Android
-def init_android():
-    global android_api_level, android_modules_loaded
-    
-    if platform != 'android':
-        return False
-    
-    try:
-        # Importar módulos específicos de Android
-        from jnius import autoclass
-        
-        # Obtener nivel de API de Android
-        Build = autoclass('android.os.Build$VERSION')
-        android_api_level = Build.SDK_INT
-        print(f"Nivel de API de Android: {android_api_level}")
-        
-        # Solicitar permisos en Android
-        from android.permissions import request_permissions, Permission, check_permission
-        
-        # Lista de permisos necesarios
-        permissions = [
-            Permission.INTERNET,
-            Permission.READ_EXTERNAL_STORAGE,
-            Permission.WRITE_EXTERNAL_STORAGE,
-            Permission.FOREGROUND_SERVICE,
-            Permission.WAKE_LOCK
-        ]
-        
-        # Verificar y solicitar permisos
-        missing_permissions = []
-        for permission in permissions:
-            if not check_permission(permission):
-                missing_permissions.append(permission)
-        
-        if missing_permissions:
-            print(f"Solicitando permisos: {missing_permissions}")
-            request_permissions(missing_permissions)
-        
-        # Configurar modo de entrada de teclado
-        Window.softinput_mode = 'below_target'
-        
-        # Configurar para mantener la pantalla encendida
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        activity = PythonActivity.mActivity
-        
-        # Mantener la pantalla encendida
-        PowerManager = autoclass('android.os.PowerManager')
-        Context = autoclass('android.content.Context')
-        
-        # Adquirir wake lock
-        power_manager = activity.getSystemService(Context.POWER_SERVICE)
-        wake_lock = power_manager.newWakeLock(
-            PowerManager.SCREEN_DIM_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE,
-            "MusicPlayer::WakeLock"
-        )
-        wake_lock.acquire()
-        
-        android_modules_loaded = True
-        print("Configuración de Android completada correctamente")
-        return True
-    except Exception as e:
-        print(f"Error en la configuración de Android: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-# Inicializar Android si estamos en esa plataforma
-if platform == 'android':
-    init_android()
-
-# Parches para KivyMD
-try:
-    from kivymd.uix.toolbar.toolbar import ActionTopAppBarButton
-    from kivymd.uix.button import MDIconButton
-    
-    # Establecer radio predeterminado para evitar errores None
-    if not hasattr(ActionTopAppBarButton, 'radius') or ActionTopAppBarButton.radius is None:
-        ActionTopAppBarButton.radius = [dp(24)]
-    
-    if not hasattr(MDIconButton, 'radius') or MDIconButton.radius is None:
-        MDIconButton.radius = [dp(24)]
-except Exception as e:
-    print(f"Error al aplicar parches para KivyMD: {e}")
-
-# Función para obtener la ruta de almacenamiento adecuada según la plataforma
-def get_storage_path():
-    if platform == 'android':
-        try:
-            from android.storage import primary_external_storage_path
-            return primary_external_storage_path()
-        except Exception as e:
-            print(f"Error al obtener ruta de almacenamiento: {e}")
-            from jnius import autoclass
-            Environment = autoclass('android.os.Environment')
-            return Environment.getExternalStorageDirectory().getPath()
-    else:
-        import os
-        return os.path.expanduser('~')
-
-# Configurar tamaño de ventana para desarrollo
-if platform != 'android':
-    Window.size = (400, 700)
-"""
-Código mejorado para incluir al inicio de tu archivo main.py
-para asegurar la compatibilidad con Android
-"""
-
-# Importaciones estándar
-from kivy.metrics import dp, sp
-from kivy.lang import Builder
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
-from kivy.clock import Clock
-from kivy.core.audio import SoundLoader
-from kivy.properties import ObjectProperty, NumericProperty, BooleanProperty, StringProperty
-from kivy.core.window import Window
-from kivymd.app import MDApp
-
-# Importar soporte para árabe
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    ARABIC_SUPPORT = True
-except ImportError:
-    print("Advertencia: Soporte para árabe no disponible")
-    ARABIC_SUPPORT = False
-
-# Función para formatear texto árabe
-def format_arabic(text):
-    if ARABIC_SUPPORT and isinstance(text, str):
-        try:
-            reshaped_text = arabic_reshaper.reshape(text)
-            return get_display(reshaped_text)
-        except Exception as e:
-            print(f"Error al formatear texto árabe: {e}")
-    return text
-
-# Configuración específica para Android
-from kivy.utils import platform
-
-# Variables globales para Android
-android_api_level = 0
-android_modules_loaded = False
-
-# Inicializar Android
-def init_android():
-    global android_api_level, android_modules_loaded
-    
-    if platform != 'android':
-        return False
-    
-    try:
-        # Importar módulos específicos de Android
-        from jnius import autoclass
-        
-        # Obtener nivel de API de Android
-        Build = autoclass('android.os.Build$VERSION')
-        android_api_level = Build.SDK_INT
-        print(f"Nivel de API de Android: {android_api_level}")
-        
-        # Solicitar permisos en Android
-        from android.permissions import request_permissions, Permission, check_permission
-        
-        # Lista de permisos necesarios
-        permissions = [
-            Permission.INTERNET,
-            Permission.READ_EXTERNAL_STORAGE,
-            Permission.WRITE_EXTERNAL_STORAGE,
-            Permission.FOREGROUND_SERVICE,
-            Permission.WAKE_LOCK
-        ]
-        
-        # Verificar y solicitar permisos
-        missing_permissions = []
-        for permission in permissions:
-            if not check_permission(permission):
-                missing_permissions.append(permission)
-        
-        if missing_permissions:
-            print(f"Solicitando permisos: {missing_permissions}")
-            request_permissions(missing_permissions)
-        
-        # Configurar modo de entrada de teclado
-        Window.softinput_mode = 'below_target'
-        
-        # Configurar para mantener la pantalla encendida
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        activity = PythonActivity.mActivity
-        
-        # Mantener la pantalla encendida
-        PowerManager = autoclass('android.os.PowerManager')
-        Context = autoclass('android.content.Context')
-        
-        # Adquirir wake lock
-        power_manager = activity.getSystemService(Context.POWER_SERVICE)
-        wake_lock = power_manager.newWakeLock(
-            PowerManager.SCREEN_DIM_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE,
-            "MusicPlayer::WakeLock"
-        )
-        wake_lock.acquire()
-        
-        android_modules_loaded = True
-        print("Configuración de Android completada correctamente")
-        return True
-    except Exception as e:
-        print(f"Error en la configuración de Android: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-# Inicializar Android si estamos en esa plataforma
-if platform == 'android':
-    init_android()
-
-# Parches para KivyMD
-try:
-    from kivymd.uix.toolbar.toolbar import ActionTopAppBarButton
-    from kivymd.uix.button import MDIconButton
-    
-    # Establecer radio predeterminado para evitar errores None
-    if not hasattr(ActionTopAppBarButton, 'radius') or ActionTopAppBarButton.radius is None:
-        ActionTopAppBarButton.radius = [dp(24)]
-    
-    if not hasattr(MDIconButton, 'radius') or MDIconButton.radius is None:
-        MDIconButton.radius = [dp(24)]
-except Exception as e:
-    print(f"Error al aplicar parches para KivyMD: {e}")
-
-# Función para obtener la ruta de almacenamiento adecuada según la plataforma
-def get_storage_path():
-    if platform == 'android':
-        try:
-            from android.storage import primary_external_storage_path
-            return primary_external_storage_path()
-        except Exception as e:
-            print(f"Error al obtener ruta de almacenamiento: {e}")
-            from jnius import autoclass
-            Environment = autoclass('android.os.Environment')
-            return Environment.getExternalStorageDirectory().getPath()
-    else:
-        import os
-        return os.path.expanduser('~')
-
-# Configurar tamaño de ventana para desarrollo
-if platform != 'android':
-    Window.size = (400, 700)
 from kivy.metrics import dp, sp
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
@@ -485,27 +53,10 @@ ActionTopAppBarButton.radius = [dp(24)]
 # Patch: Set default radius for MDIconButton to avoid None error
 MDIconButton.radius = [dp(24)]
 
-# Custom FontSelectionItem with _left_container for MDDialog compatibility
-Builder.load_string('''
-<FontSelectionItem>:
-    # Add empty _left_container to satisfy MDDialog requirements
-    BoxLayout:
-        id: _left_container
-        size_hint_x: None
-        width: 0
-''')
-
-
-class FontSelectionItem(OneLineListItem):
-    """Custom list item for font selection that includes _left_container for MDDialog compatibility"""
-    pass
-
-
 Builder.load_string('''
 <MusicPlayer>:
     orientation: 'vertical'
     theme_name: "Blue"
-    current_font: "D:\\python\\PythonProject1\\fonts\\DroidArabicNaskhRegular.ttf"
     MDNavigationLayout:
         ScreenManager:
             id: screen_manager
@@ -594,7 +145,6 @@ Builder.load_string('''
                             text_color: root.get_text_color()
                             font_style: 'Subtitle1'
                             bold: True
-                            font_name: root.current_font
                             padding: dp(10), dp(10)
                         BoxLayout:
                             orientation: 'horizontal'
@@ -701,7 +251,6 @@ Builder.load_string('''
                             theme_text_color: "Custom"
                             text_color: root.get_text_color()
                             font_style: 'Subtitle1'
-                            font_name: root.current_font
                     MDSlider:
                         id: seek_slider_now_playing
                         min: 0
@@ -829,21 +378,6 @@ Builder.load_string('''
                 MDSeparator:
                     height: dp(1)
                 MDRaisedButton:
-                    text: "Change Font"
-                    theme_text_color: "Custom"
-                    text_color: root.get_text_color()
-                    md_bg_color: root.get_button_bg_color()
-                    on_release: root.show_font_selection_dialog()
-                # Display current font name
-                MDLabel:
-                    text: "Current Font: " + root.get_current_font_name()
-                    font_style: "Caption"
-                    theme_text_color: "Custom"
-                    text_color: root.get_text_color()
-                    halign: "center"
-                MDSeparator:
-                    height: dp(1)
-                MDRaisedButton:
                     text: "Exit"
                     theme_text_color: "Custom"
                     text_color: root.get_error_color()
@@ -966,7 +500,6 @@ class MusicPlayer(BoxLayout):
     seek_scheduled = BooleanProperty(False)
     user_seeking = BooleanProperty(False)
     theme_name = StringProperty("Blue")
-    current_font = StringProperty("Roboto")
     is_search_visible = BooleanProperty(False)
     is_favorites_visible = BooleanProperty(False)
     current_pos = NumericProperty(0)
@@ -976,9 +509,8 @@ class MusicPlayer(BoxLayout):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Load saved theme and font if they exist
+        # Load saved theme
         self.load_theme()
-        self.load_font_preference()
         Clock.schedule_once(self.set_transition, 0)
         Clock.schedule_interval(self.update_progress, 0.1)
         Window.bind(size=self.adjust_layout)
@@ -1086,7 +618,7 @@ class MusicPlayer(BoxLayout):
             self.ids.bottom_bar_album_cover.size = (dp(32), dp(32)) if height < 800 else (dp(48), dp(48))
 
     def update_playlist_ui(self):
-        """Reconstruct playlist UI items with updated font and proper Arabic text processing."""
+        """Reconstruct playlist UI items."""
         self.ids.playlist_list.clear_widgets()
         playlist_to_display = self.favorites if self.is_favorites_visible else self.playlist
         for index, path in enumerate(playlist_to_display):
@@ -1097,7 +629,7 @@ class MusicPlayer(BoxLayout):
             def make_favorite_callback(p):
                 return lambda x: self.toggle_favorite(p)
 
-            # Use get_song_title for extracting and processing Arabic text
+            # Use get_song_title for extracting text
             song_title = self.get_song_title(path)
             item = LongPressSongItem(
                 text=f"{index + 1}. {song_title}",
@@ -1105,11 +637,6 @@ class MusicPlayer(BoxLayout):
                 file_path=path,
                 on_release=make_play_callback(index)
             )
-            # Force update font for Arabic display
-            item.font_name = self.current_font
-            # Update inner label font for proper Arabic text display
-            if hasattr(item, "ids") and "_lbl_primary" in item.ids:
-                item.ids._lbl_primary.font_name = self.current_font
 
             if index == self.current_index:
                 item.text_color = [0, 1, 0, 1]
@@ -1758,39 +1285,6 @@ class MusicPlayer(BoxLayout):
         except Exception as e:
             print(f"Error saving theme: {e}")
 
-    def save_font_preference(self):
-        """Save the current font preference to a JSON file."""
-        try:
-            with open("font_preference.json", "w", encoding="utf-8") as file:
-                json.dump({"font_path": self.current_font}, file)
-            print(f"Font preference saved: {self.current_font}")
-        except Exception as e:
-            print(f"Error saving font preference: {e}")
-
-    def load_font_preference(self):
-        """Load the font preference from a JSON file if it exists."""
-        default_font = "Roboto"
-        if os.path.exists("font_preference.json"):
-            try:
-                with open("font_preference.json", "r", encoding="utf-8") as file:
-                    data = json.load(file)
-                font_path = data.get("font_path", self.current_font)
-                # Verify that the font file exists; if not, use the default font.
-                if os.path.exists(font_path):
-                    self.current_font = font_path
-                    print(f"Font preference loaded: {self.current_font}")
-                else:
-                    print(f"Font file not found: {font_path}, using default font")
-                    self.current_font = default_font
-            except Exception as e:
-                print(f"Error loading font preference: {e}")
-                self.current_font = default_font
-        else:
-            # If no preference file exists, verify the current_font value.
-            if not os.path.exists(self.current_font) and self.current_font != default_font:
-                print(f"Font file {self.current_font} not found; setting default font")
-                self.current_font = default_font
-
     def load_theme(self):
         """Load the theme setting from a JSON file if it exists and update UI."""
         if os.path.exists("theme.json"):
@@ -1824,18 +1318,13 @@ class MusicPlayer(BoxLayout):
     def update_theme(self):
         app = MDApp.get_running_app()
         app.theme_cls.primary_palette = self.theme_name
-        # Update font for all text elements to support Arabic
+        # Update text elements colors only
         if hasattr(self.ids, 'current_track_name'):
-            self.ids.current_track_name.font_name = self.current_font
             self.ids.current_track_name.text_color = self.get_text_color()
         if hasattr(self.ids, 'now_playing_track_name'):
-            self.ids.now_playing_track_name.font_name = self.current_font
             self.ids.now_playing_track_name.text_color = self.get_text_color()
         for child in self.ids.playlist_list.children:
             child.text_color = self.get_text_color()
-            # Apply font to list items if they have text property
-            if hasattr(child, 'font_name'):
-                child.font_name = self.current_font
         self.ids.seek_slider_main.color = self.get_primary_color()
         self.ids.nav_drawer.md_bg_color = self.get_bg_color()
         self.ids.bottom_bar.md_bg_color = self.get_primary_color()
@@ -1849,7 +1338,7 @@ class MusicPlayer(BoxLayout):
         ]
 
     def search_tracks(self, query):
-        """Filter and display tracks based on the search query using updated Arabic text display."""
+        """Filter and display tracks based on the search query."""
         self.ids.playlist_list.clear_widgets()
         if query.strip():
             filtered_playlist = [path for path in self.playlist if query.lower() in self.get_song_title(path).lower()]
@@ -1872,11 +1361,6 @@ class MusicPlayer(BoxLayout):
                 theme_text_color="Custom",
                 on_release=make_play_callback(index)
             )
-            # Set font to current_font for proper Arabic text display
-            item.font_name = self.current_font
-            # Update inner label font for proper Arabic text display
-            if hasattr(item, "ids") and "_lbl_primary" in item.ids:
-                item.ids._lbl_primary.font_name = self.current_font
 
             if index == self.current_index:
                 item.text_color = [0, 1, 0, 1]
@@ -1933,20 +1417,16 @@ class MusicPlayer(BoxLayout):
 
     def setup_android_notification_handlers(self):
         """Set up handlers for Android notification actions."""
-        from kivy.utils import platform
         if platform != 'android':
-            print("Android notification handlers not set up: not running on Android.")
+            print("Skipping Android notification setup: not running on Android.")
             return
         try:
+            from jnius import autoclass
             # Import jnius safely
             try:
                 from jnius import autoclass
             except ImportError:
                 print("pyjnius module not found; Android functionality disabled.")
-                return
-
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            activity = PythonActivity.mActivity
 
             # Register a broadcast receiver to handle notification actions
             try:
@@ -2186,7 +1666,7 @@ class MusicPlayer(BoxLayout):
             self.ids.album_grid.add_widget(item)
 
     def get_song_title(self, path):
-        """Extract the song title using mutagen's interface and fix Arabic text by reshaping and reordering.
+        """Extract the song title using mutagen's interface.
         Falls back to ID3 tags for MP3 or to the filename if no metadata is available.
         """
         result = None
@@ -2224,94 +1704,10 @@ class MusicPlayer(BoxLayout):
                 print(f"Decoding error for title in {path}: {decode_err}")
                 result = str(result)
 
-        # Always apply Arabic reshaping and correct bidirectional ordering
-        try:
-            reshaped_text = arabic_reshaper.reshape(result)
-            display_text = get_display(reshaped_text)
-        except Exception as e:
-            print(f"Error reshaping Arabic text for {path}: {e}")
-            display_text = result
-
-        return display_text
-
-    def get_system_fonts(self):
-        """Extract available fonts from the custom fonts directory only."""
-        import os
-        fonts = {}
-        custom_fonts_dir = r"D:\python\PythonProject1\fonts"
-        if os.path.isdir(custom_fonts_dir):
-            for root_dir, dirs, files in os.walk(custom_fonts_dir):
-                for file in files:
-                    if file.lower().endswith(('.ttf', '.otf')):
-                        font_name = os.path.splitext(file)[0]
-                        full_path = os.path.join(root_dir, file)
-                        fonts[font_name] = full_path
-        # Return sorted list by font name
-        return sorted(fonts.items(), key=lambda x: x[0])
-
-    def get_current_font_name(self):
-        """Get the name of the current font file without the full path."""
-        import os
-        return os.path.basename(self.current_font)
-
-    def show_font_selection_dialog(self):
-        """Display font selection dialog using system installed fonts."""
-        from kivymd.uix.dialog import MDDialog
-        self.system_fonts = self.get_system_fonts()
-        font_items = []
-        for font_name, font_path in self.system_fonts:
-            # Use FontSelectionItem instead of OneLineListItem to avoid KeyError in MDDialog
-            item = FontSelectionItem(
-                text=font_name,
-                on_release=lambda x, fn=font_path: self.apply_font(fn)
-            )
-            font_items.append(item)
-
-        self._font_dialog = MDDialog(
-            title="Select Font",
-            type="simple",
-            items=font_items,
-            buttons=[
-                # Cancel button to close dialog
-                MDFlatButton(
-                    text="CANCEL",
-                    theme_text_color="Custom",
-                    text_color=self.get_primary_color(),
-                    on_release=lambda x: self._font_dialog.dismiss()
-                )
-            ]
-        )
-        self._font_dialog.open()
-
-    def apply_font(self, font_path):
-        """Apply selected font to the interface and store the font file path in current_font property."""
-        # Verify font existence before applying
-        if os.path.exists(font_path):
-            self.current_font = font_path
-        else:
-            print(f"Font file {font_path} not found, using default font")
-            self.current_font = "Roboto"
-        app = MDApp.get_running_app()
-        # Update main track name label
-        if hasattr(self, 'ids'):
-            if 'current_track_name' in self.ids:
-                self.ids.current_track_name.font_name = self.current_font
-            # Update Now Playing screen track name
-            if 'now_playing_track_name' in self.ids:
-                self.ids.now_playing_track_name.font_name = self.current_font
-        self._font_dialog.dismiss()
-        # Save font preference
-        self.save_font_preference()
-        # Update theme to refresh text widgets across the interface
-        self.update_theme()
-        # Update playlist UI to apply font to all song items
-        self.update_playlist_ui()
-        print(f"Font applied: {self.current_font}")
+        return result
 
     def handle_long_press(self, song_item):
-        """Handle long press on song item by showing options dialog.
-        Ensures Arabic text is displayed correctly in the dialog.
-        """
+        """Handle long press on song item by showing options dialog."""
 
         def delete_action(instance):
             self.show_delete_confirmation(song_item.file_path)
@@ -2352,9 +1748,7 @@ class MusicPlayer(BoxLayout):
         dialog.open()
 
     def show_song_details(self, path):
-        """Show song details in a dialog.
-        Ensures Arabic text is displayed correctly in the dialog.
-        """
+        """Show song details in a dialog."""
         try:
             audio = MP3(path)
             # Use the get_song_title method for consistent title extraction
@@ -2363,13 +1757,8 @@ class MusicPlayer(BoxLayout):
             # Try to get ID3 tags if available
             try:
                 tags = ID3(path)
-                # Process artist and album names for Arabic text
-                artist_raw = str(tags.get('TPE1', 'Unknown Artist'))
-                album_raw = str(tags.get('TALB', 'Unknown Album'))
-
-                # Reshape and reorder Arabic text
-                artist = get_display(arabic_reshaper.reshape(artist_raw))
-                album = get_display(arabic_reshaper.reshape(album_raw))
+                artist = str(tags.get('TPE1', 'Unknown Artist'))
+                album = str(tags.get('TALB', 'Unknown Album'))
             except:
                 artist = 'Unknown Artist'
                 album = 'Unknown Album'
@@ -2419,6 +1808,9 @@ class MusicPlayerApp(MDApp):
     def build(self):
         return MusicPlayer()
 
+from kivy.core.window import Window
+
+Window.size = (360, 640)
 
 if __name__ == '__main__':
     MusicPlayerApp().run()
