@@ -134,7 +134,6 @@ jobs:
 """
 import sys
 import os
-import string
 import re
 
 def find_in_path(file_name):
@@ -239,7 +238,7 @@ if "ANT_OPTS" in os.environ and os.environ["ANT_OPTS"]:
   ANT_OPTS = os.environ["ANT_OPTS"]
 
 args = sys.argv[1:]
-ANT_ARGS = string.join(args, " ")
+ANT_ARGS = " ".join(args)  # Use " ".join() instead of string.join() for Python 3 compatibility
 
 # Set the max java heap size
 if ANT_OPTS.find("-Xmx") == -1:
