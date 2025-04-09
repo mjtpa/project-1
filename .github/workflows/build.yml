@@ -1,3 +1,4 @@
+
 name: Build APK
 
 on:
@@ -71,53 +72,59 @@ jobs:
           mkdir -p ~/.buildozer/android/platform
           cd ~/.buildozer/android/platform
           
-          # Try multiple times with increasing timeouts
-          for i in {1..3}; do
-            echo "Attempt $i to download Android NDK..."
-            if curl -L --connect-timeout 30 --max-time 3600 \
-              https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
-              -o android-ndk-r25b-linux.zip; then
-              echo "Successfully downloaded Android NDK"
-              break
-            fi
-            sleep 30
-          done
+          echo "Downloading Android NDK..."
+          curl -L --connect-timeout 30 --max-time 3600 \
+            https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
+            -o android-ndk-r25b-linux.zip || {
+              echo "First download attempt failed, retrying..."
+              sleep 10
+              curl -L --connect-timeout 30 --max-time 3600 \
+                https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
+                -o android-ndk-r25b-linux.zip
+            }
           
-          # Verify download was successful
           if [ -f android-ndk-r25b-linux.zip ]; then
             echo "Unzipping Android NDK..."
             unzip -q android-ndk-r25b-linux.zip
             echo "NDK download and extraction complete"
           else
-            echo "Failed to download Android NDK after multiple attempts"
+            echo "Failed to download Android NDK"
             exit 1
           fi
 
-      # Create a simpler Python 3 compatible version of runant.py
-      - name: Create Python 3 compatible runant.py
+      # Pre-download and patch Apache Ant
+      - name: Setup Apache Ant with Python 3 compatibility
         run: |
-          mkdir -p ~/.buildozer/android/platform/apache-ant-1.9.4/bin
+          mkdir -p ~/.buildozer/android/platform
+          cd ~/.buildozer/android/platform
           
-          # Create a simple Python 3 compatible runant.py script
-          cat > ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py << 'EOF'
+          # Download Apache Ant
+          echo "Downloading Apache Ant..."
+          curl -L https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -o apache-ant-1.9.4-bin.tar.gz
+          
+          # Extract Apache Ant
+          echo "Extracting Apache Ant..."
+          tar -xzf apache-ant-1.9.4-bin.tar.gz
+          
+          # Create Python 3 compatible runant.py
+          echo "Creating Python 3 compatible runant.py..."
+          cat > apache-ant-1.9.4/bin/runant.py << 'EOF'
 #!/usr/bin/env python3
-# Python 3 compatible version of runant.py
 import os
 import sys
 
 def main():
-    # Print usage if help flag is provided
+    # Handle help option
     if len(sys.argv) == 2 and (sys.argv[1] == "-h" or sys.argv[1] == "--help"):
         print("Usage: runant.py [script options] [options] [target [target2 [target3] ...]]")
         sys.exit(0)
     
-    # Check JAVA_HOME
+    # Check environment
     java_home = os.environ.get("JAVA_HOME", "")
     if not java_home or not os.path.isdir(java_home):
         print("Warning: JAVA_HOME is not defined correctly.")
         print("         ANT cannot execute java.")
     
-    # Check ANT_HOME
     ant_home = os.environ.get("ANT_HOME", "")
     if not ant_home or not os.path.isdir(ant_home):
         print("Warning: ANT_HOME is not defined correctly.")
@@ -132,57 +139,28 @@ def main():
         else:
             java_cmd = "java"
     
-    # Get ANT options
+    # Prepare options
     ant_opts = os.environ.get("ANT_OPTS", "")
     if "-Xmx" not in ant_opts:
         ant_opts += " -Xmx512m"
     
-    # Build command arguments
+    # Command args
     args = sys.argv[1:]
     ant_args = " ".join(args)
-    
-    # Get Ant jar path
     ant_jar = os.path.join(ant_home, "lib/ant.jar")
     
-    # Build and execute command
+    # Execute
     cmd = f"{java_cmd} {ant_opts} -classpath {ant_jar} -Dant.home={ant_home} org.apache.tools.ant.Main {ant_args}"
-    os.system(cmd)
+    sys.exit(os.system(cmd))
 
 if __name__ == "__main__":
     main()
 EOF
           
-          # Make the script executable
-          chmod +x ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py
-          
-          # Verify that the script was created
-          echo "Verifying runant.py was created..."
-          ls -la ~/.buildozer/android/platform/apache-ant-1.9.4/bin/
-          
-          # Preemptively download Apache Ant
-          mkdir -p ~/.buildozer/android/platform
-          cd ~/.buildozer/android/platform
-          
-          echo "Downloading Apache Ant..."
-          curl -L https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -o apache-ant-1.9.4-bin.tar.gz
-          
-          echo "Extracting Apache Ant..."
-          tar -xzf apache-ant-1.9.4-bin.tar.gz
-          
-          # Ensure our patched runant.py is in place
-          echo "Ensuring patched runant.py is in place..."
-          cp -f ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py apache-ant-1.9.4/bin/runant.py
+          # Make executable
           chmod +x apache-ant-1.9.4/bin/runant.py
           
           echo "Apache Ant setup complete"
-
-      - name: Cache Buildozer directories
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
 
       - name: Prepare required files
         run: |
@@ -200,10 +178,7 @@ EOF
           [ ! -f "data/theme.json" ] && echo '{"theme_name": "DeepPurple"}' > data/theme.json
           mkdir -p fonts
 
-          echo "Current directory structure:"
-          find . -type f -not -path "./.git/*" | sort
-
-      - name: Patch _img_sdl2.pyx for noexcept compatibility
+      - name: Patch Kivy for compatibility
         run: |
           pip install kivy==2.1.0
           SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
@@ -215,47 +190,28 @@ EOF
             sed -i 's/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/' "$FILE_PATH"
           else
             echo "Warning: File not found: $FILE_PATH"
-            find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
           fi
 
-      - name: Create or update buildozer.spec
+      - name: Configure buildozer.spec
         run: |
           if [ ! -f "buildozer.spec" ]; then
             echo "Creating buildozer.spec file"
             buildozer init
-            # Customize the spec file
-            sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-            sed -i 's/^android.sdk =.*/android.sdk = 33/' buildozer.spec
-            # Point to the pre-downloaded NDK
-            sed -i 's/^#android.ndk_path =.*/android.ndk_path = ~\/.buildozer\/android\/platform\/android-ndk-r25b/' buildozer.spec
-            # Point to the pre-patched Apache Ant
-            sed -i 's/^#android.ant_path =.*/android.ant_path = ~\/.buildozer\/android\/platform\/apache-ant-1.9.4/' buildozer.spec
-          else
-            echo "buildozer.spec exists, updating settings"
-            sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-            sed -i 's/^android.sdk =.*/android.sdk = 33/' buildozer.spec
-            # Point to the pre-downloaded NDK
-            sed -i 's/^#android.ndk_path =.*/android.ndk_path = ~\/.buildozer\/android\/platform\/android-ndk-r25b/' buildozer.spec
-            # Point to the pre-patched Apache Ant
-            sed -i 's/^#android.ant_path =.*/android.ant_path = ~\/.buildozer\/android\/platform\/apache-ant-1.9.4/' buildozer.spec
           fi
-          cat buildozer.spec
+          
+          # Update buildozer configuration
+          sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
+          sed -i 's/^android.sdk =.*/android.sdk = 33/' buildozer.spec
+          sed -i 's/^#android.ndk_path =.*/android.ndk_path = ~\/.buildozer\/android\/platform\/android-ndk-r25b/' buildozer.spec
+          sed -i 's/^#android.ant_path =.*/android.ant_path = ~\/.buildozer\/android\/platform\/apache-ant-1.9.4/' buildozer.spec
 
-      - name: Build with Buildozer
+      - name: Build APK with Buildozer
         run: |
           export ANDROIDSDK=/opt/android-sdk
           export ANDROIDAPI=33
           export NDK_API=21
           
-          # Check if the ant scripts are patched correctly
-          echo "Checking if runant.py is patched correctly..."
-          if [ -f ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py ]; then
-            head -n 10 ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py
-          else
-            echo "Warning: runant.py not found where expected"
-          fi
-          
-          # Increase the timeout for the build process
+          # Build with increased timeout
           timeout 90m buildozer --verbose android debug || {
             echo "Buildozer failed. Checking logs..."
             find .buildozer -name "build.err.log" -exec cat {} \;
@@ -269,7 +225,7 @@ EOF
           name: android-app
           path: bin/*.apk
           
-      - name: Upload build logs if build fails
+      - name: Upload build logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
