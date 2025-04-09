@@ -2,9 +2,16 @@ name: Build APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+
+env:
+  ANDROID_SDK_ROOT: /opt/android-sdk
+  ANDROID_HOME: /opt/android-sdk
+  BUILDDOZER_ANDROID_ACCEPT_LICENSE: yes
+  USE_SDL2: 1
+  ANT_OPTS: -Xmx4g
+  GRADLE_OPTS: -Xmx4g
 
 jobs:
   build:
@@ -13,12 +20,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update && sudo apt install -y \
             build-essential \
@@ -26,39 +33,74 @@ jobs:
             git \
             zip \
             unzip \
-            openjdk-18-jdk \
+            openjdk-17-jdk \
             libncurses5 \
             libffi-dev \
             libssl-dev \
             libsqlite3-dev \
             zlib1g-dev \
             python3-pip \
-            imagemagick
+            imagemagick \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev
 
-          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
 
-          # تثبيت مكتبات بايثون الأساسية
-          pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow
+      - name: Add swap space
+        run: |
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow kivy==2.1.0
+
+      - name: Clean previous Android installations
+        run: |
+          sudo rm -rf /opt/android-sdk
+          sudo rm -rf ~/.android
 
       - name: Install Android SDK
-        env:
-          ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
-          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          sudo mkdir -p $ANDROID_SDK_ROOT
           sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
+          
+          # Download and install command line tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-
+          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT
+          mv $ANDROID_SDK_ROOT/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools-latest
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools-latest $ANDROID_SDK_ROOT/cmdline-tools/latest
+          
+          # Accept all licenses
           mkdir -p $ANDROID_SDK_ROOT/licenses
-          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+          echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+          
+          # Install required packages
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest"
+          
+          # Add to PATH
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/build-tools/33.0.2" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-
-          sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
-          sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
+      - name: Verify Android Tools Installation
+        run: |
+          echo "Checking installed components:"
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --list
+          
+          echo "Checking Aidl:"
+          ls $ANDROID_SDK_ROOT/build-tools/33.0.2/aidl || echo "Aidl check failed!"
+          
+          echo "Build tools content:"
+          ls -la $ANDROID_SDK_ROOT/build-tools/33.0.2/
 
       - name: Cache Buildozer directories
         uses: actions/cache@v3
@@ -66,12 +108,12 @@ jobs:
           path: |
             ~/.buildozer
             .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
+            /opt/android-sdk
+          key: buildozer-${{ hashFiles('buildozer.spec') }}
 
       - name: Prepare required files
         run: |
           if [ ! -f "default_album_cover.gif" ]; then
-            echo "Creating default_album_cover.gif"
             convert -size 100x100 xc:#456D89 default_album_cover.gif
           fi
 
@@ -80,16 +122,10 @@ jobs:
 
           [ ! -f "playlist.json" ] && echo "[]" > playlist.json
           [ ! -f "theme.json" ] && echo '{"theme_name": "DeepPurple"}' > theme.json
-          [ ! -f "data/playlist.json" ] && echo "[]" > data/playlist.json
-          [ ! -f "data/theme.json" ] && echo '{"theme_name": "DeepPurple"}' > data/theme.json
           mkdir -p fonts
-
-          echo "Current directory structure:"
-          find . -type f -not -path "./.git/*" | sort
 
       - name: Patch _img_sdl2.pyx for noexcept compatibility
         run: |
-          pip install kivy==2.1.0
           SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
           FILE_PATH="$SITE_PACKAGES/kivy/core/image/_img_sdl2.pyx"
 
@@ -104,17 +140,18 @@ jobs:
 
       - name: Build with Buildozer
         run: |
-          export ANDROIDSDK=/opt/android-sdk
+          export ANDROIDSDK=$ANDROID_SDK_ROOT
           export ANDROIDAPI=33
           export NDK_API=21
-          timeout 60m buildozer --verbose android debug
+          buildozer --verbose android debug || (find .buildozer -name "*.log" -exec cat {} \; && exit 1)
 
-          if [ ! -f "bin/musicplayer-0.1-arm64-v8a_armeabi-v7a-debug.apk" ]; then
-            echo "APK not found. Checking logs..."
-            find .buildozer -name "build.err.log" -exec cat {} \;
-            find .buildozer -name "log*.txt" -exec cat {} \;
-            exit 1
-          fi
+      - name: Test APK (basic check)
+        if: success()
+        run: |
+          apk_file=$(ls bin/*.apk)
+          echo "APK File: $apk_file"
+          file $apk_file
+          aapt dump badging $apk_file | grep package
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
