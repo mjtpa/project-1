@@ -1,362 +1,116 @@
-name: Build APK
+[app]
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+# Basic application information
+title = MusicPlayer
+package.name = musicplayer
+package.domain = org.test
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+# Version information
+version = 0.1
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,json,gif,ttf,otf
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+# Python dependencies
+requirements = 
+    python3,
+    kivy==2.1.0,
+    kivymd==1.1.1,
+    pillow,
+    arabic_reshaper,
+    python-bidi,
+    cython==0.29.33,
+    mutagen,
+    wheel
 
-      - name: Install dependencies
-        run: |
-          sudo apt update && sudo apt install -y \
-            build-essential \
-            ccache \
-            git \
-            zip \
-            unzip \
-            openjdk-18-jdk \
-            libncurses5 \
-            libffi-dev \
-            libssl-dev \
-            libsqlite3-dev \
-            zlib1g-dev \
-            python3-pip \
-            imagemagick \
-            wget \
-            curl
+# Orientation and display
+orientation = portrait
+fullscreen = 0
 
-          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
-          echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
+# Graphics assets
+icon.filename = %(source.dir)s/icon.png
+presplash.filename = %(source.dir)s/data/default_album_cover.gif
 
-          # Install Python libraries
-          pip install --upgrade pip setuptools wheel
-          pip install cython==0.29.33 pillow
-          pip install buildozer==1.5.0
+# Android permissions
+android.permissions = 
+    READ_EXTERNAL_STORAGE,
+    WRITE_EXTERNAL_STORAGE,
+    INTERNET
 
-      - name: Install Android SDK
-        env:
-          ANDROID_SDK_ROOT: /opt/android-sdk
-        run: |
-          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
-          wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 \
-            https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+# Android API settings
+android.api = 33
+android.minapi = 21
+android.ndk = 25.1.8937393
+android.ndk_path = /opt/android-ndk/android-ndk-r25b
+android.ndk_api = 21
+android.archs = arm64-v8a,armeabi-v7a
 
-          mkdir -p $ANDROID_SDK_ROOT/licenses
-          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+# Build behavior
+bootstrap = sdl2
+p4a.branch = master
+android.multi_touch = 1
+android.hide_titlebar = 0
+android.window_soft_input_mode = adjustResize
+android.accept_sdk_license = True
 
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+# Build tools version constraints
+android.build_tools_min_version = 33.0.2
+android.build_tools_max_version = 33.0.2
 
-          sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
-          sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
+# Additional files to include
+include_patterns = 
+    assets/*,
+    fonts/*.ttf,
+    fonts/*.otf,
+    data/*.json,
+    data/*.gif
 
-      # Pre-download Android NDK to prevent timeout in buildozer
-      - name: Pre-download Android NDK
-        run: |
-          mkdir -p ~/.buildozer/android/platform
-          cd ~/.buildozer/android/platform
-          
-          # Try multiple times with increasing timeouts
-          for i in {1..3}; do
-            echo "Attempt $i to download Android NDK..."
-            if curl -L --connect-timeout 30 --max-time 3600 \
-              https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
-              -o android-ndk-r25b-linux.zip; then
-              echo "Successfully downloaded Android NDK"
-              break
-            fi
-            sleep 30
-          done
-          
-          # Verify download was successful
-          if [ -f android-ndk-r25b-linux.zip ]; then
-            echo "Unzipping Android NDK..."
-            unzip -q android-ndk-r25b-linux.zip
-            echo "NDK download and extraction complete"
-          else
-            echo "Failed to download Android NDK after multiple attempts"
-            exit 1
-          fi
+# Exclude unnecessary files
+exclude_patterns = apache-ant-1.9.4/*
 
-      # Pre-download and prepare Apache Ant
-      - name: Pre-download Apache Ant and patch Python 2 scripts
-        run: |
-          mkdir -p ~/.buildozer/android/platform
-          cd ~/.buildozer/android/platform
-          
-          # Download Apache Ant
-          echo "Downloading Apache Ant..."
-          curl -L https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -o apache-ant-1.9.4-bin.tar.gz
-          
-          # Extract Apache Ant
-          echo "Extracting Apache Ant..."
-          tar -xzf apache-ant-1.9.4-bin.tar.gz
-          
-          # Patch the runant.py script to be Python 3 compatible
-          echo "Patching runant.py for Python 3 compatibility..."
-          cat > apache-ant-1.9.4/bin/runant.py << 'EOF'
-#!/usr/bin/python
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to You under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""
- This script is a translation of the ant.bat file into Python.
+# Performance optimizations
+android.enable_androidx = True
+android.enable_jetifier = True
 
- The script is intended to be used with the bash shell, on systems with a
- posix shell, but where python may have better string processing abilities,
- like Cygwin
-"""
-import sys
-import os
-import string
-import re
+# Debugging options
+log_level = 2
+android.allow_background = true
 
-def find_in_path(file_name):
-  """
-  Search for a file in the PATH environment variable
-  """
-  paths = []
-  if "PATH" in os.environ:
-    paths = os.environ["PATH"].split(os.pathsep)
+##############################################
+# Buildozer configuration section
+##############################################
+[buildozer]
 
-  for path in paths:
-    if os.path.isfile(os.path.join(path, file_name)):
-      return path
-  
-  # Not found
-  return None
+# Logging and behavior
+log_level = 2
+warn_on_root = 1
 
-def fixpath(path):
-  """
-  Convert a windows path to a unix path for cygwin
-  """
-  if sys.platform == "cygwin":
-    return pipe("cygpath -u " + path)
-  else:
-    return path
+##############################################
+# Python for Android configuration
+##############################################
+[pythonforandroid]
 
-def pipe(cmd):
-  """
-  Return the results of a shell command
-  """
-  return os.popen(cmd).read().strip()
+# Recipe modifications if needed
+# recipes.python = python3
 
-def which(filename):
-  """
-  Search for a file in the PATH
-  """
-  path = find_in_path(filename)
-  if path:
-    return os.path.join(path, filename)
-  else:
-    return filename
+##############################################
+# Android specific configurations
+##############################################
+[android]
 
+# Release signing (uncomment and fill for release builds)
+# key.store = %(source.dir)s/keystore.jks
+# key.store.password = yourpassword
+# key.alias = youralias
+# key.alias.password = youraliaspassword
 
-# Help text
-if len(sys.argv) == 2 and (sys.argv[1] == "-h" or sys.argv[1] == "--help"):
-  print("Usage: runant.py [script options] [options] [target [target2 [target3] ...]]")
-  sys.exit(0)
+# NDK optimizations
+android.extra_ndk_args = -O3 -fstrict-aliasing
 
-# Find Java
-java_home = None
-if "JAVA_HOME" in os.environ and os.environ["JAVA_HOME"]:
-  java_home = fixpath(os.environ["JAVA_HOME"])
-  
-if not java_home or not os.path.isdir(java_home):
-  print("Warning: JAVA_HOME is not defined correctly.")
-  print("         ANT cannot execute java.")
+##############################################
+# iOS specific configurations (optional)
+##############################################
+[ios]
 
-ANT_HOME = None
-if "ANT_HOME" in os.environ and os.environ["ANT_HOME"]:
-  ANT_HOME = fixpath(os.environ["ANT_HOME"])
-
-if not ANT_HOME or not os.path.isdir(ANT_HOME):
-  print("Warning: ANT_HOME is not defined correctly.")
-  print("         ANT cannot execute.")
-  sys.exit(1)
-
-def GetJavaRuntime(JAVA_HOME):
-  # Look for JAVA_HOME/jre/bin/java
-  if JAVA_HOME and os.path.isdir(JAVA_HOME + "/jre/bin/"):
-    java_runtime = JAVA_HOME + "/jre/bin/java"
-    if sys.platform == "cygwin":
-      java_runtime = pipe("cygpath --unix " + java_runtime)
-    return java_runtime
-    
-  # Determine Java runtime from PATH environment
-  return which("java")
-
-def GetAntRuntime(ANT_HOME):
-  "Locate the Ant jar file"
-  path = ANT_HOME + "/lib/ant.jar"
-  if sys.platform == "cygwin":
-    path = pipe("cygpath --unix " + path)
-  return path
-
-def RunAnt(java_runtime, ant_jar_path, ant_opts, ant_args):
-  "Execute ant"
-  if sys.platform == "cygwin":
-    # Convert ant parameters to windows format
-    ant_args = pipe("cygpath --windows " + ant_args)
-  cmd = java_runtime + " " + ant_opts + " -classpath " + ant_jar_path + " -Dant.home=" + ANT_HOME + " org.apache.tools.ant.Main " + ant_args
-  os.system(cmd)
-
-JAVACMD = None
-if "JAVACMD" in os.environ and os.environ["JAVACMD"]:
-  JAVACMD = pipe(os.environ["JAVACMD"])
-else:
-  JAVACMD = GetJavaRuntime(java_home)
-
-# Build the parameters
-ANT_OPTS = ""
-if "ANT_OPTS" in os.environ and os.environ["ANT_OPTS"]:
-  ANT_OPTS = os.environ["ANT_OPTS"]
-
-args = sys.argv[1:]
-ANT_ARGS = string.join(args, " ")
-
-# Set the max java heap size
-if ANT_OPTS.find("-Xmx") == -1:
-  ANT_OPTS = ANT_OPTS + " -Xmx512m"
-
-# Run Ant
-RunAnt(JAVACMD, GetAntRuntime(ANT_HOME), ANT_OPTS, ANT_ARGS)
-EOF
-          
-          # Make the script executable
-          chmod +x apache-ant-1.9.4/bin/runant.py
-          
-          # Verify that the script was patched
-          echo "Verifying runant.py patch..."
-          grep "print(" apache-ant-1.9.4/bin/runant.py
-          
-          echo "Apache Ant setup complete"
-
-      - name: Cache Buildozer directories
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
-
-      - name: Prepare required files
-        run: |
-          if [ ! -f "default_album_cover.gif" ]; then
-            echo "Creating default_album_cover.gif"
-            convert -size 100x100 xc:#456D89 default_album_cover.gif
-          fi
-
-          mkdir -p data
-          cp default_album_cover.gif data/
-
-          [ ! -f "playlist.json" ] && echo "[]" > playlist.json
-          [ ! -f "theme.json" ] && echo '{"theme_name": "DeepPurple"}' > theme.json
-          [ ! -f "data/playlist.json" ] && echo "[]" > data/playlist.json
-          [ ! -f "data/theme.json" ] && echo '{"theme_name": "DeepPurple"}' > data/theme.json
-          mkdir -p fonts
-
-          echo "Current directory structure:"
-          find . -type f -not -path "./.git/*" | sort
-
-      - name: Patch _img_sdl2.pyx for noexcept compatibility
-        run: |
-          pip install kivy==2.1.0
-          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
-          FILE_PATH="$SITE_PACKAGES/kivy/core/image/_img_sdl2.pyx"
-
-          if [ -f "$FILE_PATH" ]; then
-            echo "Patching file: $FILE_PATH"
-            sed -i 's/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/' "$FILE_PATH"
-            sed -i 's/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/' "$FILE_PATH"
-          else
-            echo "Warning: File not found: $FILE_PATH"
-            find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
-          fi
-
-      - name: Create or update buildozer.spec
-        run: |
-          if [ ! -f "buildozer.spec" ]; then
-            echo "Creating buildozer.spec file"
-            buildozer init
-            # Customize the spec file
-            sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-            sed -i 's/^android.sdk =.*/android.sdk = 33/' buildozer.spec
-            # Point to the pre-downloaded NDK
-            sed -i 's/^#android.ndk_path =.*/android.ndk_path = ~\/.buildozer\/android\/platform\/android-ndk-r25b/' buildozer.spec
-            # Point to the pre-patched Apache Ant
-            sed -i 's/^#android.ant_path =.*/android.ant_path = ~\/.buildozer\/android\/platform\/apache-ant-1.9.4/' buildozer.spec
-          else
-            echo "buildozer.spec exists, updating settings"
-            sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-            sed -i 's/^android.sdk =.*/android.sdk = 33/' buildozer.spec
-            # Point to the pre-downloaded NDK
-            sed -i 's/^#android.ndk_path =.*/android.ndk_path = ~\/.buildozer\/android\/platform\/android-ndk-r25b/' buildozer.spec
-            # Point to the pre-patched Apache Ant
-            sed -i 's/^#android.ant_path =.*/android.ant_path = ~\/.buildozer\/android\/platform\/apache-ant-1.9.4/' buildozer.spec
-          fi
-          cat buildozer.spec
-
-      - name: Build with Buildozer
-        run: |
-          export ANDROIDSDK=/opt/android-sdk
-          export ANDROIDAPI=33
-          export NDK_API=21
-          
-          # Check if the ant scripts are patched correctly
-          echo "Checking if runant.py is patched correctly..."
-          if [ -f ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py ]; then
-            grep "print(" ~/.buildozer/android/platform/apache-ant-1.9.4/bin/runant.py
-          else
-            echo "Warning: runant.py not found where expected"
-          fi
-          
-          # Increase the timeout for the build process
-          timeout 90m buildozer --verbose android debug || {
-            echo "Buildozer failed. Checking logs..."
-            find .buildozer -name "build.err.log" -exec cat {} \;
-            find .buildozer -name "log*.txt" -exec cat {} \;
-            exit 1
-          }
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-app
-          path: bin/*.apk
-          
-      - name: Upload build logs if build fails
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            .buildozer/android/platform/build-*/dists/**/build.log
-            .buildozer/android/platform/build-*/dists/**/build.err.log
-            .buildozer/android/platform/build-*/build.log
+# Uncomment and fill if building for iOS
+# ios.kivy_ios_url = https://github.com/kivy/kivy-ios
+# ios.kivy_ios_branch = master
