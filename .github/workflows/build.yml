@@ -9,15 +9,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
+      # استنساخ الكود من المستودع
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # إعداد Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # تثبيت الاعتمادات الأساسية
       - name: Install dependencies
         run: |
           sudo apt update && sudo apt install -y \
@@ -39,8 +43,9 @@ jobs:
           echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
 
           # تثبيت مكتبات بايثون الأساسية
-          pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow
+          pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow arabic_reshaper python-bidi mutagen
 
+      # تثبيت Apache Ant
       - name: Install Apache Ant
         run: |
           wget https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz
@@ -50,6 +55,7 @@ jobs:
           echo "export PATH=\$PATH:\$ANT_HOME/bin" >> ~/.bashrc
           source ~/.bashrc
 
+      # تثبيت Android SDK
       - name: Install Android SDK
         env:
           ANDROID_SDK_ROOT: /opt/android-sdk
@@ -69,6 +75,7 @@ jobs:
           sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
           sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
 
+      # تثبيت Android NDK
       - name: Install Android NDK
         env:
           ANDROID_NDK_ROOT: /opt/android-ndk
@@ -77,6 +84,7 @@ jobs:
           unzip android-ndk.zip -d $ANDROID_NDK_ROOT
           rm android-ndk.zip
 
+      # تخزين الملفات المؤقتة
       - name: Cache Buildozer directories
         uses: actions/cache@v3
         with:
@@ -85,6 +93,7 @@ jobs:
             .buildozer
           key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
 
+      # إعداد الملفات المطلوبة
       - name: Prepare required files
         run: |
           if [ ! -f "default_album_cover.gif" ]; then
@@ -104,6 +113,7 @@ jobs:
           echo "Current directory structure:"
           find . -type f -not -path "./.git/*" | sort
 
+      # تصحيح _img_sdl2.pyx
       - name: Patch _img_sdl2.pyx for noexcept compatibility
         run: |
           pip install kivy==2.1.0
@@ -119,6 +129,7 @@ jobs:
             find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
           fi
 
+      # بناء التطبيق باستخدام Buildozer
       - name: Build with Buildozer
         run: |
           export ANDROIDSDK=/opt/android-sdk
@@ -133,6 +144,7 @@ jobs:
             exit 1
           fi
 
+      # رفع ملف APK كـ Artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
