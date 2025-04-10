@@ -80,8 +80,11 @@ jobs:
         env:
           ANDROID_NDK_ROOT: /opt/android-ndk
         run: |
-          wget https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -O android-ndk.zip
-          unzip android-ndk.zip -d $ANDROID_NDK_ROOT
+          echo "Downloading Android NDK..."
+          wget --timeout=60 --tries=3 https://dl.google.com/android/repository/android-ndk-r25.1.8937393-linux.zip -O android-ndk.zip || { echo "Download failed"; exit 1; }
+          echo "Unpacking Android NDK..."
+          unzip android-ndk.zip -d $ANDROID_NDK_ROOT || { echo "Unzip failed"; exit 1; }
+          echo "Cleaning up..."
           rm android-ndk.zip
 
       # تخزين الملفات المؤقتة
