@@ -9,7 +9,160 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+name: Build APK
 
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt update && sudo apt install -y \
+            build-essential \
+            ccache \
+            git \
+            zip \
+            unzip \
+            openjdk-18-jdk \
+            libncurses5 \
+            libffi-dev \
+            libssl-dev \
+            libsqlite3-dev \
+            zlib1g-dev \
+            python3-pip \
+            imagemagick
+
+          echo "JAVA_HOME=/usr/lib/jvm/java-18-openjdk-amd64" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/java-18-openjdk-amd64/bin" >> $GITHUB_PATH
+
+          pip install --upgrade pip setuptools wheel buildozer cython==0.29.33 pillow arabic_reshaper python-bidi mutagen
+
+      # Install Apache Ant
+      - name: Install Apache Ant
+        run: |
+          wget https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz
+          tar -xzf apache-ant-1.9.4-bin.tar.gz
+          rm apache-ant-1.9.4-bin.tar.gz
+          export ANT_HOME=/home/runner/.buildozer/android/platform/apache-ant-1.9.4
+          echo "export PATH=\$PATH:\$ANT_HOME/bin" >> ~/.bashrc
+          source ~/.bashrc
+
+      # Install Android SDK
+      - name: Install Android SDK
+        env:
+          ANDROID_SDK_ROOT: /opt/android-sdk
+        run: |
+          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          sudo chown -R $USER:$USER $ANDROID_SDK_ROOT
+          wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+
+          mkdir -p $ANDROID_SDK_ROOT/licenses
+          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
+
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
+          sudo mkdir -p $ANDROID_SDK_ROOT/tools/bin
+          sudo ln -s $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager $ANDROID_SDK_ROOT/tools/bin/sdkmanager
+
+      # Install Android NDK
+      - name: Install Android NDK
+        env:
+          ANDROID_NDK_ROOT: /opt/android-ndk
+        run: |
+          echo "Downloading Android NDK..."
+          wget --timeout=60 --tries=3 https://dl.google.com/android/repository/android-ndk-r26b-linux.zip -O android-ndk.zip || { echo "Download failed"; exit 1; }
+          echo "Unpacking Android NDK..."
+          unzip android-ndk.zip -d $ANDROID_NDK_ROOT || { echo "Unzip failed"; exit 1; }
+          echo "Cleaning up..."
+          rm android-ndk.zip
+
+      # Cache Buildozer directories
+      - name: Cache Buildozer directories
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
+
+      # Prepare required files
+      - name: Prepare required files
+        run: |
+          if [ ! -f "default_album_cover.gif" ]; then
+            echo "Creating default_album_cover.gif"
+            convert -size 100x100 xc:#456D89 default_album_cover.gif
+          fi
+
+          mkdir -p data
+          cp default_album_cover.gif data/
+
+          [ ! -f "playlist.json" ] && echo "[]" > playlist.json
+          [ ! -f "theme.json" ] && echo '{"theme_name": "DeepPurple"}' > theme.json
+          [ ! -f "data/playlist.json" ] && echo "[]" > data/playlist.json
+          [ ! -f "data/theme.json" ] && echo '{"theme_name": "DeepPurple"}' > data/theme.json
+          mkdir -p fonts
+
+          echo "Current directory structure:"
+          find . -type f -not -path "./.git/*" | sort
+
+      # Patch _img_sdl2.pyx
+      - name: Patch _img_sdl2.pyx for noexcept compatibility
+        run: |
+          pip install kivy==2.1.0
+          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
+          FILE_PATH="$SITE_PACKAGES/kivy/core/image/_img_sdl2.pyx"
+
+          if [ -f "$FILE_PATH" ]; then
+            echo "Patching file: $FILE_PATH"
+            sed -i 's/&rwops_bytesio_write/&(<size_t (*)(SDL_RWops *, void *, size_t, size_t) noexcept>)rwops_bytesio_write/' "$FILE_PATH"
+            sed -i 's/&rwops_bytesio_close/&(<int (*)(SDL_RWops *) noexcept>)rwops_bytesio_close/' "$FILE_PATH"
+          else
+            echo "Warning: File not found: $FILE_PATH"
+            find / -name "_img_sdl2.pyx" 2>/dev/null | head -n 5
+          fi
+
+      # Build with Buildozer
+      - name: Build with Buildozer
+        run: |
+          export ANDROIDSDK=/opt/android-sdk
+          export ANDROIDAPI=33
+          export NDK_API=21
+          timeout 60m buildozer --verbose android debug
+
+          if [ ! -f "bin/musicplayer-0.1-arm64-v8a_armeabi-v7a-debug.apk" ]; then
+            echo "APK not found. Checking logs..."
+            find .buildozer -name "build.err.log" -exec cat {} \;
+            find .buildozer -name "log*.txt" -exec cat {} \;
+            exit 1
+          fi
+
+      # Upload APK artifact
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-app
+          path: bin/*.apk
     steps:
       # استنساخ الكود من المستودع
       - name: Checkout code
